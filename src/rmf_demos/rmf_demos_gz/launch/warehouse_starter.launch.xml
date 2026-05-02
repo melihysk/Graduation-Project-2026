@@ -1,0 +1,24 @@
+<?xml version='1.0' ?>
+
+<launch>
+  <arg name="use_sim_time" default="true"/>
+  <arg name="gazebo_version" default="8"/>
+  <arg name="headless" default="false"/>
+  <arg name="sim_update_rate" default="100"/>
+  <!-- <arg name="server_uri" default="http://localhost:8000/_internal"/> -->
+
+  <!-- Common RMF + fleet adapter -->
+  <include file="$(find-pkg-share rmf_demos)/warehouse_starter.launch.xml">
+    <arg name="use_sim_time" value="$(var use_sim_time)"/>
+    <!-- <arg name="server_uri" value="$(var server_uri)"/> -->
+  </include>
+
+  <!-- Gazebo simulation -->
+  <include file="$(find-pkg-share rmf_demos_gz)/simulation.launch.xml">
+    <arg name="map_name" value="warehouse_starter"/>
+    <arg name="gazebo_version" value="$(var gazebo_version)"/>
+    <arg name="headless" value="$(var headless)"/>
+    <arg name="sim_update_rate" value="$(var sim_update_rate)"/>
+  </include>
+
+</launch>
