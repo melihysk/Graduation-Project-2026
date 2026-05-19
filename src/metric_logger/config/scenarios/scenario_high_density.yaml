@@ -1,0 +1,193 @@
+# Senaryo 3 — Yüksek Yoğunluk
+# Sürekli görev akışı, tüm koridorlar yoğun (robot sayısı haritadaki fleet'e bağlı)
+# Amaç: İDKR'nin otopark-sız görev atamasının throughput avantajını göstermek
+#
+# Özellikler:
+#   - Daha fazla görev, daha kısa aralıklar
+#   - Tüm kavşaklar (T_NORTH, X_CENTER, X_SOUTH) kullanılıyor
+
+scenario:
+  id: high_density
+  description: "Yüksek yoğunluk — sürekli görev akışı"
+  expected_duration_sec: 500
+
+tasks:
+  # İlk dalga: 4 görev aynı anda (her robota birer)
+  - type: delivery
+    description: "R1: PICK_A → DROP_A"
+    pickup:
+      place: PICK_A
+      handler: dispenser_a
+      sku: item_a
+    dropoff:
+      place: DROP_A
+      handler: ingestor_a
+    priority: 0
+
+  - type: delivery
+    description: "R2: PICK_B → DROP_B"
+    pickup:
+      place: PICK_B
+      handler: dispenser_b
+      sku: item_b
+    dropoff:
+      place: DROP_B
+      handler: ingestor_b
+    priority: 0
+
+  - type: delivery
+    description: "R3: PICK_C → DROP_C"
+    pickup:
+      place: PICK_C
+      handler: dispenser_c
+      sku: item_c
+    dropoff:
+      place: DROP_C
+      handler: ingestor_c
+    priority: 0
+
+  - type: delivery
+    description: "R4: PICK_D → DROP_A"
+    pickup:
+      place: PICK_D
+      handler: dispenser_d
+      sku: item_d
+    dropoff:
+      place: DROP_A
+      handler: ingestor_a
+    priority: 0
+
+  # İkinci dalga: çapraz rotalar
+  - type: delivery
+    description: "PICK_A → DROP_B (çapraz)"
+    pickup:
+      place: PICK_A
+      handler: dispenser_a
+      sku: item_a
+    dropoff:
+      place: DROP_B
+      handler: ingestor_b
+    priority: 0
+
+  - type: delivery
+    description: "PICK_B → DROP_C (çapraz)"
+    pickup:
+      place: PICK_B
+      handler: dispenser_b
+      sku: item_b
+    dropoff:
+      place: DROP_C
+      handler: ingestor_c
+    priority: 0
+
+  - type: delivery
+    description: "PICK_C → DROP_A (çapraz)"
+    pickup:
+      place: PICK_C
+      handler: dispenser_c
+      sku: item_c
+    dropoff:
+      place: DROP_A
+      handler: ingestor_a
+    priority: 0
+
+  - type: delivery
+    description: "PICK_D → DROP_B (çapraz)"
+    pickup:
+      place: PICK_D
+      handler: dispenser_d
+      sku: item_d
+    dropoff:
+      place: DROP_B
+      handler: ingestor_b
+    priority: 0
+
+  # Üçüncü dalga: uzun mesafe + kalabalık
+  - type: delivery
+    description: "PICK_A → DROP_C (en uzun mesafe)"
+    pickup:
+      place: PICK_A
+      handler: dispenser_a
+      sku: item_a
+    dropoff:
+      place: DROP_C
+      handler: ingestor_c
+    priority: 0
+
+  - type: delivery
+    description: "PICK_B → DROP_A (ters çapraz)"
+    pickup:
+      place: PICK_B
+      handler: dispenser_b
+      sku: item_b
+    dropoff:
+      place: DROP_A
+      handler: ingestor_a
+    priority: 0
+
+  - type: delivery
+    description: "PICK_C → DROP_B (merkez yoğun)"
+    pickup:
+      place: PICK_C
+      handler: dispenser_c
+      sku: item_c
+    dropoff:
+      place: DROP_B
+      handler: ingestor_b
+    priority: 0
+
+  - type: delivery
+    description: "PICK_D → DROP_C (üst → üst sağ)"
+    pickup:
+      place: PICK_D
+      handler: dispenser_d
+      sku: item_d
+    dropoff:
+      place: DROP_C
+      handler: ingestor_c
+    priority: 0
+
+  # Dördüncü dalga: ek baskı
+  - type: delivery
+    description: "PICK_A → DROP_A (tekrar)"
+    pickup:
+      place: PICK_A
+      handler: dispenser_a
+      sku: item_a
+    dropoff:
+      place: DROP_A
+      handler: ingestor_a
+    priority: 0
+
+  - type: delivery
+    description: "PICK_B → DROP_B (tekrar)"
+    pickup:
+      place: PICK_B
+      handler: dispenser_b
+      sku: item_b
+    dropoff:
+      place: DROP_B
+      handler: ingestor_b
+    priority: 0
+
+  - type: delivery
+    description: "PICK_C → DROP_A (son dalga)"
+    pickup:
+      place: PICK_C
+      handler: dispenser_c
+      sku: item_c
+    dropoff:
+      place: DROP_A
+      handler: ingestor_a
+    priority: 0
+
+  - type: delivery
+    description: "PICK_D → DROP_B (son dalga)"
+    pickup:
+      place: PICK_D
+      handler: dispenser_d
+      sku: item_d
+    dropoff:
+      place: DROP_B
+      handler: ingestor_b
+    priority: 0

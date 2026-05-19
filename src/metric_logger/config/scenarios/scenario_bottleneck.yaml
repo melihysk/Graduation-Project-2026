@@ -1,0 +1,149 @@
+# Senaryo 2 — Dar Koridor (Bottleneck)
+# Karşılıklı trafik, dar geçiş bölgesi (robot sayısı haritadaki fleet'e bağlı)
+# Amaç: DKR'nin "bekle" davranışı vs İDKR'nin Res1 çözümü karşılaştırması
+#
+# Stratejik görev tasarımı:
+#   - Robotları T_NORTH ve X_CENTER kavşaklarından geçmeye zorlayan rotalar
+#   - Karşılıklı yönde trafik oluşturan pickup/dropoff çiftleri
+#   - Dar koridor: sol (PICK_A/B/C) ↔ sağ (DROP_A/B/C) arası geçiş
+
+scenario:
+  id: bottleneck
+  description: "Dar koridor — karşılıklı trafik, çatışma zorlama"
+  expected_duration_sec: 400
+
+tasks:
+  # Batch 1: Üç robot aynı anda karşılıklı yönlerde — çatışma garanti
+  - type: delivery
+    description: "Sol→Sağ: PICK_A → DROP_A (üst koridor)"
+    pickup:
+      place: PICK_A
+      handler: dispenser_a
+      sku: item_a
+    dropoff:
+      place: DROP_A
+      handler: ingestor_a
+    priority: 0
+
+  - type: delivery
+    description: "Sol→Sağ: PICK_C → DROP_A (orta→üst sağ)"
+    pickup:
+      place: PICK_C
+      handler: dispenser_c
+      sku: item_c
+    dropoff:
+      place: DROP_A
+      handler: ingestor_a
+    priority: 0
+
+  - type: delivery
+    description: "Sağ→Sol: PICK_D → DROP_B (üst sağ→alt sol)"
+    pickup:
+      place: PICK_D
+      handler: dispenser_d
+      sku: item_d
+    dropoff:
+      place: DROP_B
+      handler: ingestor_b
+    priority: 0
+
+  # Batch 2: X_CENTER kavşağında çakışma
+  - type: delivery
+    description: "PICK_B → DROP_C (X_CENTER üzerinden)"
+    pickup:
+      place: PICK_B
+      handler: dispenser_b
+      sku: item_b
+    dropoff:
+      place: DROP_C
+      handler: ingestor_c
+    priority: 0
+
+  - type: delivery
+    description: "PICK_C → DROP_B (X_CENTER üzerinden ters)"
+    pickup:
+      place: PICK_C
+      handler: dispenser_c
+      sku: item_c
+    dropoff:
+      place: DROP_B
+      handler: ingestor_b
+    priority: 0
+
+  - type: delivery
+    description: "PICK_A → DROP_B (T_NORTH + X_CENTER)"
+    pickup:
+      place: PICK_A
+      handler: dispenser_a
+      sku: item_a
+    dropoff:
+      place: DROP_B
+      handler: ingestor_b
+    priority: 0
+
+  # Batch 3: Yoğun merkez trafiği
+  - type: delivery
+    description: "PICK_B → DROP_A (alt sol → üst sağ, tam çapraz)"
+    pickup:
+      place: PICK_B
+      handler: dispenser_b
+      sku: item_b
+    dropoff:
+      place: DROP_A
+      handler: ingestor_a
+    priority: 0
+
+  - type: delivery
+    description: "PICK_A → DROP_C (üst sol → üst sağ)"
+    pickup:
+      place: PICK_A
+      handler: dispenser_a
+      sku: item_a
+    dropoff:
+      place: DROP_C
+      handler: ingestor_c
+    priority: 0
+
+  - type: delivery
+    description: "PICK_D → DROP_B (merkez → alt)"
+    pickup:
+      place: PICK_D
+      handler: dispenser_d
+      sku: item_d
+    dropoff:
+      place: DROP_B
+      handler: ingestor_b
+    priority: 0
+
+  - type: delivery
+    description: "PICK_C → DROP_C (orta sol → üst sağ)"
+    pickup:
+      place: PICK_C
+      handler: dispenser_c
+      sku: item_c
+    dropoff:
+      place: DROP_C
+      handler: ingestor_c
+    priority: 0
+
+  - type: delivery
+    description: "PICK_B → DROP_C (alt sol → üst sağ)"
+    pickup:
+      place: PICK_B
+      handler: dispenser_b
+      sku: item_b
+    dropoff:
+      place: DROP_C
+      handler: ingestor_c
+    priority: 0
+
+  - type: delivery
+    description: "PICK_A → DROP_A (üst sol → üst sağ kısa)"
+    pickup:
+      place: PICK_A
+      handler: dispenser_a
+      sku: item_a
+    dropoff:
+      place: DROP_A
+      handler: ingestor_a
+    priority: 0

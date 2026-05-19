@@ -61,4 +61,12 @@
       <param name="server_uri" value="$(var server_uri)"/>
     </node>
   </group>
+
+  <!-- Mutex Group Supervisor -->
+  <group>
+    <node pkg="rmf_fleet_adapter" exec="mutex_group_supervisor">
+      <param name="use_sim_time" value="$(var use_sim_time)"/>
+    </node>
+</group>
+
 </launch>

@@ -1,0 +1,125 @@
+# Senaryo 1 — Normal Yoğunluk
+# Geniş koridorlar, aralıklı görevler (robot sayısı haritadaki fleet'e bağlı)
+# Amaç: Baseline performans ölçümü, modlar arası temel fark tespiti
+#
+# Harita waypoint'leri:
+#   Pickup: PICK_A (dispenser_a), PICK_B (dispenser_b), PICK_C (dispenser_c), PICK_D (dispenser_d)
+#   Dropoff: DROP_A (ingestor_a), DROP_B (ingestor_b), DROP_C (ingestor_c)
+#   Kavşaklar: T_NORTH, X_CENTER, X_SOUTH
+#   Ara noktalar: N_UPPER_W, N_UPPER_C, N_UPPER_E, N_MID_W, N_MID_E, N_MAIN_W, N_MAIN_E
+
+scenario:
+  id: normal
+  description: "Normal yoğunluk — aralıklı görevler"
+  expected_duration_sec: 300
+
+tasks:
+  - type: delivery
+    description: "PICK_A → DROP_A"
+    pickup:
+      place: PICK_A
+      handler: dispenser_a
+      sku: item_a
+    dropoff:
+      place: DROP_A
+      handler: ingestor_a
+    priority: 0
+
+  - type: delivery
+    description: "PICK_B → DROP_B"
+    pickup:
+      place: PICK_B
+      handler: dispenser_b
+      sku: item_b
+    dropoff:
+      place: DROP_B
+      handler: ingestor_b
+    priority: 0
+
+  - type: delivery
+    description: "PICK_C → DROP_C"
+    pickup:
+      place: PICK_C
+      handler: dispenser_c
+      sku: item_c
+    dropoff:
+      place: DROP_C
+      handler: ingestor_c
+    priority: 0
+
+  - type: delivery
+    description: "PICK_A → DROP_B"
+    pickup:
+      place: PICK_A
+      handler: dispenser_a
+      sku: item_a
+    dropoff:
+      place: DROP_B
+      handler: ingestor_b
+    priority: 0
+
+  - type: delivery
+    description: "PICK_B → DROP_C"
+    pickup:
+      place: PICK_B
+      handler: dispenser_b
+      sku: item_b
+    dropoff:
+      place: DROP_C
+      handler: ingestor_c
+    priority: 0
+
+  - type: delivery
+    description: "PICK_C → DROP_A"
+    pickup:
+      place: PICK_C
+      handler: dispenser_c
+      sku: item_c
+    dropoff:
+      place: DROP_A
+      handler: ingestor_a
+    priority: 0
+
+  - type: delivery
+    description: "PICK_D → DROP_B"
+    pickup:
+      place: PICK_D
+      handler: dispenser_d
+      sku: item_d
+    dropoff:
+      place: DROP_B
+      handler: ingestor_b
+    priority: 0
+
+  - type: delivery
+    description: "PICK_A → DROP_C"
+    pickup:
+      place: PICK_A
+      handler: dispenser_a
+      sku: item_a
+    dropoff:
+      place: DROP_C
+      handler: ingestor_c
+    priority: 0
+
+  - type: delivery
+    description: "PICK_B → DROP_A"
+    pickup:
+      place: PICK_B
+      handler: dispenser_b
+      sku: item_b
+    dropoff:
+      place: DROP_A
+      handler: ingestor_a
+    priority: 0
+
+  - type: delivery
+    description: "PICK_C → DROP_B"
+    pickup:
+      place: PICK_C
+      handler: dispenser_c
+      sku: item_c
+    dropoff:
+      place: DROP_B
+      handler: ingestor_b
+    priority: 0
