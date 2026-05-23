@@ -56,13 +56,13 @@ levels:
     measurements:
       - [0, 1, {distance: [3, 34]}]
     models:
-      - {dispensable: false, model_name: OpenRobotics/TeleportDispenser, name: dispenser_a, static: true, x: 42.921999999999997, y: 39.951000000000001, yaw: 1.5708, z: 0}
-      - {dispensable: false, model_name: OpenRobotics/TeleportDispenser, name: dispenser_b, static: true, x: 43.295000000000002, y: 150.042, yaw: 1.5708, z: 0}
-      - {dispensable: false, model_name: OpenRobotics/TeleportDispenser, name: dispenser_c, static: true, x: 43.773000000000003, y: 89.966999999999999, yaw: 1.5708, z: 0}
+      - {dispensable: false, model_name: OpenRobotics/TeleportDispenser, name: dispenser_a, static: true, x: 42.262999999999998, y: 39.884999999999998, yaw: 1.5708, z: 0}
+      - {dispensable: false, model_name: OpenRobotics/TeleportDispenser, name: dispenser_b, static: true, x: 42.533000000000001, y: 149.756, yaw: 1.5708, z: 0}
+      - {dispensable: false, model_name: OpenRobotics/TeleportDispenser, name: dispenser_c, static: true, x: 42.523000000000003, y: 89.733000000000004, yaw: 1.5708, z: 0}
       - {dispensable: false, model_name: OpenRobotics/TeleportDispenser, name: dispenser_d, static: true, x: 169.86600000000001, y: 13.675000000000001, yaw: -1.5810999999999999, z: 0}
-      - {dispensable: false, model_name: OpenRobotics/TeleportIngestor, name: ingestor_a, static: true, x: 290.06, y: 90.251999999999995, yaw: 3.1415999999999999, z: 0}
-      - {dispensable: false, model_name: OpenRobotics/TeleportIngestor, name: ingestor_b, static: true, x: 293.51400000000001, y: 149.96000000000001, yaw: 3.1415999999999999, z: 0}
-      - {dispensable: false, model_name: OpenRobotics/TeleportIngestor, name: ingestor_c, static: true, x: 291.50999999999999, y: 39.933999999999997, yaw: 3.1415999999999999, z: 0}
+      - {dispensable: false, model_name: OpenRobotics/TeleportIngestor, name: ingestor_a, static: true, x: 295.36700000000002, y: 89.986000000000004, yaw: 3.1415999999999999, z: 0}
+      - {dispensable: false, model_name: OpenRobotics/TeleportIngestor, name: ingestor_b, static: true, x: 295.21300000000002, y: 150.01499999999999, yaw: 3.1415999999999999, z: 0}
+      - {dispensable: false, model_name: OpenRobotics/TeleportIngestor, name: ingestor_c, static: true, x: 296.19, y: 39.939, yaw: 3.1415999999999999, z: 0}
     vertices:
       - [0, 0, 0, ""]
       - [340, 0, 0, ""]

@@ -1,0 +1,17 @@
+dkr_traffic_manager:
+  ros__parameters:
+    # RMF nav graph (metre — fleet adapter ile aynı dosya)
+    nav_graph_file: ""
+
+    # Lookahead: artık kullanılmıyor — tam yol rezervasyonu yapılır (all-or-nothing)
+    # Parametre geriye uyumluluk için kalıyor
+    lookahead: 999
+
+    # Bekleyen robotlar için retry aralığı (saniye)
+    retry_interval_sec: 0.5
+
+    # Periyodik deadlock kontrolü aralığı (saniye)
+    deadlock_check_interval_sec: 2.0
+
+    # Segment tamamlama tespiti için konum toleransı (metre)
+    arrival_tolerance: 1.5

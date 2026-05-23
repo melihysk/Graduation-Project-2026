@@ -1,0 +1,33 @@
+<?xml version='1.0' ?>
+<!--
+  warehouse_starter DKR modu + Gazebo simülasyonu.
+
+  rmf_demos/warehouse_starter_dkr.launch.xml kullanır:
+    - rmf_traffic_schedule AKTİF (fleet adapter planning/bidding için)
+    - rmf_traffic_blockade YOK (DKR enforce eder)
+
+  Kullanım:
+    ros2 launch rmf_demos_gz warehouse_starter_dkr.launch.xml
+-->
+
+<launch>
+  <arg name="use_sim_time" default="true"/>
+  <arg name="gazebo_version" default="8"/>
+  <arg name="headless" default="false"/>
+  <arg name="sim_update_rate" default="100"/>
+
+  <!-- RMF altyapısı (blockade yok, schedule var) -->
+  <include file="$(find-pkg-share rmf_demos)/warehouse_starter_dkr.launch.xml">
+    <arg name="use_sim_time" value="$(var use_sim_time)"/>
+    <arg name="headless" value="$(var headless)"/>
+  </include>
+
+  <!-- Gazebo simulation -->
+  <include file="$(find-pkg-share rmf_demos_gz)/simulation.launch.xml">
+    <arg name="map_name" value="warehouse_starter"/>
+    <arg name="gazebo_version" value="$(var gazebo_version)"/>
+    <arg name="headless" value="$(var headless)"/>
+    <arg name="sim_update_rate" value="$(var sim_update_rate)"/>
+  </include>
+
+</launch>

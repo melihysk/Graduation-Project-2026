@@ -47,6 +47,7 @@ from rmf_traffic_msgs.msg import (
     BlockadeSet,
     BlockadeRelease,
 )
+from std_msgs.msg import String
 
 from .task_tracker import TaskTracker
 from .robot_tracker import RobotTracker
@@ -169,6 +170,12 @@ class MetricLoggerNode(Node):
         self.create_subscription(
             BlockadeRelease, '/rmf_traffic/blockade_release',
             self._conflict_tracker.on_blockade_release, best_effort_volatile
+        )
+
+        # DKR/İDKR event subscriber (Mode 2-3)
+        self.create_subscription(
+            String, '/dkr_events',
+            self._conflict_tracker.on_dkr_event, reliable_volatile
         )
 
         # Status timer — check if experiment should end
