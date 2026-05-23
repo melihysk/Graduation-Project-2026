@@ -65,6 +65,7 @@ class MetricLoggerNode(Node):
         self.declare_parameter('scenario_id', 'normal')
         self.declare_parameter('run_id', 1)
         self.declare_parameter('expected_tasks', 0)
+        self.declare_parameter('expected_robots', 4)
         self.declare_parameter('output_dir', '')
         self.declare_parameter('auto_finish_timeout_sec', 60.0)
 
@@ -72,6 +73,7 @@ class MetricLoggerNode(Node):
         self._scenario_id = self.get_parameter('scenario_id').value
         self._run_id = self.get_parameter('run_id').value
         self._expected_tasks = self.get_parameter('expected_tasks').value
+        self._expected_robots = int(self.get_parameter('expected_robots').value)
         self._auto_finish_timeout = self.get_parameter('auto_finish_timeout_sec').value
 
         output_dir = self.get_parameter('output_dir').value
@@ -175,7 +177,7 @@ class MetricLoggerNode(Node):
         # DKR/İDKR event subscriber (Mode 2-3)
         self.create_subscription(
             String, '/dkr_events',
-            self._conflict_tracker.on_dkr_event, reliable_volatile
+            self._on_dkr_event, reliable_volatile
         )
 
         # Status timer — check if experiment should end
@@ -186,6 +188,9 @@ class MetricLoggerNode(Node):
         self._last_fleet_robot_tasks: list[tuple[str, str]] = []
         self._last_agent_status_log_wall = 0.0
         self._stale_timeout_sec = 90.0
+        self._robots_at_charger: set[str] = set()
+        self._last_charger_wait_log_wall = 0.0
+        self._last_charger_count_logged = -1
         self.create_timer(2.0, self._check_status)
 
         self.get_logger().info(
@@ -197,6 +202,42 @@ class MetricLoggerNode(Node):
     def _on_dispatch_states_cb(self, msg):
         """Delegate to TaskTracker — kept as a seam for QoS/trace hooks."""
         self._task_tracker.on_dispatch_states(msg)
+
+    def _on_dkr_event(self, msg):
+        """DKR deny/grant/deadlock + delivery lifecycle (dkr/idkr modes)."""
+        self._conflict_tracker.on_dkr_event(msg)
+        if self._traffic_mode not in ('dkr', 'idkr'):
+            return
+
+        try:
+            event = json.loads(msg.data)
+        except (json.JSONDecodeError, TypeError):
+            return
+
+        event_type = event.get('type', '')
+        now = time.time()
+
+        if event_type == 'task_assigned':
+            task_id = event.get('task_id', '')
+            robot = event.get('robot', '')
+            if task_id and robot:
+                self._robots_at_charger.discard(robot)
+                self._task_tracker.mark_started_via_fleet(task_id, robot, now)
+
+        elif event_type == 'task_completed':
+            task_id = event.get('task_id', '')
+            robot = event.get('robot', '')
+            if task_id:
+                self._task_tracker.mark_completed_via_fleet(task_id, now, robot)
+
+        elif event_type == 'charger_arrival':
+            robot = event.get('robot', '')
+            if robot:
+                self._robots_at_charger.add(robot)
+                self.get_logger().info(
+                    f'Robot at charger: {robot} '
+                    f'({len(self._robots_at_charger)}/{self._expected_robots})'
+                )
 
     def _on_fleet_state(self, msg):
         """Combined fleet_states handler: robot metrics + task completion detection."""
@@ -217,6 +258,9 @@ class MetricLoggerNode(Node):
                     reports mode=0 (IDLE) in this rmf_demos setup.
         """
         now = time.time()
+
+        if self._traffic_mode in ('dkr', 'idkr'):
+            return
 
         for robot in msg.robots:
             robot_name = robot.name
@@ -299,7 +343,35 @@ class MetricLoggerNode(Node):
             )
 
         # Finish condition 1: all expected tasks completed.
-        if self._expected_tasks > 0 and self._task_tracker.all_tasks_completed:
+        all_done = (
+            self._expected_tasks > 0 and self._task_tracker.all_tasks_completed
+        )
+
+        if all_done and self._traffic_mode in ('dkr', 'idkr'):
+            at_charger = len(self._robots_at_charger)
+            if at_charger >= self._expected_robots:
+                self.get_logger().info(
+                    f'All {self._expected_tasks} tasks completed and '
+                    f'all {self._expected_robots} robots at charger. '
+                    f'Saving results...'
+                )
+                self._finish_experiment()
+                return
+
+            now_wall = time.time()
+            if (
+                at_charger != self._last_charger_count_logged
+                or now_wall - self._last_charger_wait_log_wall >= 12.0
+            ):
+                self._last_charger_count_logged = at_charger
+                self._last_charger_wait_log_wall = now_wall
+                self.get_logger().info(
+                    f'All tasks completed — waiting for robots at charger '
+                    f'({at_charger}/{self._expected_robots})...'
+                )
+            return
+
+        if all_done:
             self.get_logger().info('All expected tasks completed. Saving results...')
             self._finish_experiment()
             return

@@ -1,0 +1,110 @@
+<?xml version='1.0' ?>
+<!--
+  Sadece Gazebo + RViz simülasyonu — RMF trafik yönetimi YOK.
+
+  DKR/iDKR standalone modu için: robotlar Gazebo'da simüle edilir,
+  trafik kontrolü tamamen DKR'ye bırakılır.
+
+  Başlatılanlar:
+    - Gazebo (warehouse_starter world + slotcar robotlar)
+    - Building map server (RViz haritası)
+    - rmf_visualization (RViz robotlar + nav graph)
+    - Fleet state publisher (robot_state → fleet_states aggregation)
+    - DKR graph visualizer (/dkr_markers — statik nav graph + PICK/DROP etiketleri)
+    - /clock bridge (sim time)
+    - RViz
+
+  Başlatılmayanlar:
+    - rmf_traffic_schedule (negotiation YOK)
+    - rmf_fleet_adapter (bidding/negotiation YOK)
+    - fleet_manager (REST bridge YOK)
+    - rmf_traffic_blockade (DKR kendi enforcement'ını yapar)
+    - rmf_task_dispatcher (DKR kendi görev atama yapar)
+
+  Kullanım:
+    # Terminal 1 — Simülasyon:
+    ros2 launch rmf_demos_gz warehouse_starter_standalone.launch.xml
+
+    # Terminal 2 — DKR + metrik:
+    ros2 launch dkr_controller dkr_standalone.launch.py scenario_id:=normal ...
+-->
+
+<launch>
+  <arg name="use_sim_time" default="true"/>
+  <arg name="gazebo_version" default="8"/>
+  <arg name="headless" default="false"/>
+  <arg name="sim_update_rate" default="100"/>
+  <arg name="config_file" default="$(find-pkg-share rmf_demos_maps)/warehouse_starter/warehouse_starter.building.yaml"/>
+  <arg name="nav_graph_file" default="$(find-pkg-share rmf_demos_maps)/maps/warehouse_starter/nav_graphs/0.yaml"/>
+  <arg name="viz_config_file" default="$(find-pkg-share rmf_demos)/include/warehouse_starter/warehouse_starter.rviz"/>
+
+  <!-- Gazebo simulation (slotcar robots + world) -->
+  <include file="$(find-pkg-share rmf_demos_gz)/simulation.launch.xml">
+    <arg name="map_name" value="warehouse_starter"/>
+    <arg name="gazebo_version" value="$(var gazebo_version)"/>
+    <arg name="headless" value="$(var headless)"/>
+    <arg name="sim_update_rate" value="$(var sim_update_rate)"/>
+  </include>
+
+  <!-- Building Map Server (RViz haritası için) -->
+  <node pkg="rmf_building_map_tools" exec="building_map_server"
+        args="$(var config_file)">
+    <param name="use_sim_time" value="$(var use_sim_time)"/>
+  </node>
+
+  <!-- Fleet State Publisher (robot_state → fleet_states, RViz için) -->
+  <node pkg="dkr_controller" exec="fleet_state_publisher"
+        name="fleet_state_publisher" output="screen">
+    <param name="fleet_name" value="warehouseRobot"/>
+    <param name="publish_rate" value="2.0"/>
+    <param name="use_sim_time" value="$(var use_sim_time)"/>
+  </node>
+
+  <!-- Reservation nav graph markers (statik — RViz /dkr_markers) -->
+  <node pkg="reservation_viz" exec="graph_visualizer"
+        name="graph_visualizer" output="screen">
+    <param name="nav_graph_file" value="$(var nav_graph_file)"/>
+    <param name="publish_rate_hz" value="1.0"/>
+    <param name="topic_prefix" value="dkr"/>
+    <param name="use_sim_time" value="$(var use_sim_time)"/>
+  </node>
+
+  <!--
+    rmf_visualization node'ları tek tek başlatılır.
+    schedule_visualizer başlatılmaz (rmf_traffic_schedule yok).
+  -->
+  <node pkg="rmf_visualization_fleet_states" exec="fleetstates_visualizer_node">
+    <param name="use_sim_time" value="$(var use_sim_time)"/>
+    <param name="deliveryRobot_radius" value="0.6"/>
+  </node>
+
+  <node pkg="rmf_visualization_navgraphs" exec="navgraph_visualizer_node">
+    <param name="use_sim_time" value="$(var use_sim_time)"/>
+    <param name="initial_map_name" value="L1"/>
+    <param name="lane_width" value="0.5"/>
+  </node>
+
+  <node pkg="rmf_visualization_floorplans" exec="floorplan_visualizer_node">
+    <param name="use_sim_time" value="$(var use_sim_time)"/>
+    <param name="initial_map_name" value="L1"/>
+  </node>
+
+  <node pkg="rmf_visualization_building_systems" exec="rmf_visualization_building_systems"
+        args="-m L1">
+    <param name="use_sim_time" value="$(var use_sim_time)"/>
+  </node>
+
+  <!-- RViz -->
+  <group unless="$(var headless)">
+    <executable cmd="rviz2 -d $(var viz_config_file)" output="both"/>
+  </group>
+
+  <!-- Door / Lift supervisors (harita kapı/asansör varsa) -->
+  <node pkg="rmf_fleet_adapter" exec="door_supervisor">
+    <param name="use_sim_time" value="$(var use_sim_time)"/>
+  </node>
+  <node pkg="rmf_fleet_adapter" exec="lift_supervisor">
+    <param name="use_sim_time" value="$(var use_sim_time)"/>
+  </node>
+
+</launch>

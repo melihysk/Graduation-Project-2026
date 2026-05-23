@@ -21,6 +21,8 @@
   <exec_depend>gz_sim_vendor</exec_depend>
 
   <exec_depend>ros_gz_bridge</exec_depend>
+  <exec_depend>reservation_viz</exec_depend>
+  <exec_depend>dkr_controller</exec_depend>
 
   <export>
     <build_type>ament_cmake</build_type>

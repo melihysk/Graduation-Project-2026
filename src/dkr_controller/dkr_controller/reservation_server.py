@@ -49,6 +49,24 @@ class ReservationServer:
         # Robot → currently held resources (for quick lookup)
         self._robot_holdings: dict[str, set[str]] = {}
 
+        # Bidirectional edge pairing: edge_A_B ↔ edge_B_A share a physical
+        # corridor. Reserving one must block the other to prevent head-on
+        # collisions.
+        self._reverse_edge: dict[str, str] = {}
+        for rid in all_resource_ids:
+            rev = self._make_reverse_edge_id(rid)
+            if rev and rev in self._resources:
+                self._reverse_edge[rid] = rev
+
+    @staticmethod
+    def _make_reverse_edge_id(resource_id: str) -> str | None:
+        if not resource_id.startswith("edge_"):
+            return None
+        parts = resource_id.split("_")
+        if len(parts) == 3:
+            return f"edge_{parts[2]}_{parts[1]}"
+        return None
+
     def set_deadlock_detector(self, detector: "DeadlockDetector") -> None:
         self._deadlock_detector = detector
 
@@ -100,52 +118,75 @@ class ReservationServer:
         if not needed:
             return ReservationResult(granted=True)
 
-        # Check availability — find first blocker
+        # Check availability — find first blocker (including reverse edges)
         for rid in needed:
-            state = self._resources[rid]
-            if state.owner is not None and state.owner != robot_name:
-                # Deadlock check before denying
-                if self._deadlock_detector:
-                    would_cycle = self._deadlock_detector.would_cause_cycle(
-                        requesting_robot=robot_name,
-                        blocking_robot=state.owner,
-                    )
-                    if would_cycle:
-                        return ReservationResult(
-                            granted=False,
+            for check_rid in self._rid_and_reverse(rid):
+                state = self._resources.get(check_rid)
+                if state is None:
+                    continue
+                if state.owner is not None and state.owner != robot_name:
+                    if self._deadlock_detector:
+                        would_cycle = self._deadlock_detector.would_cause_cycle(
+                            requesting_robot=robot_name,
                             blocking_robot=state.owner,
-                            blocking_resources=[rid],
-                            reason=f"deadlock_risk: cycle with {state.owner}",
                         )
+                        if would_cycle:
+                            return ReservationResult(
+                                granted=False,
+                                blocking_robot=state.owner,
+                                blocking_resources=[rid],
+                                reason=f"deadlock_risk: cycle with {state.owner}",
+                            )
 
-                return ReservationResult(
-                    granted=False,
-                    blocking_robot=state.owner,
-                    blocking_resources=[rid],
-                    reason=f"resource_busy: {rid} held by {state.owner}",
-                )
+                    return ReservationResult(
+                        granted=False,
+                        blocking_robot=state.owner,
+                        blocking_resources=[rid],
+                        reason=f"resource_busy: {check_rid} held by {state.owner}",
+                    )
 
-        # All needed resources are free — grant atomically
+        # All needed resources are free — grant atomically (plus reverse edges)
         now = time.time()
+        granted_extras: list[str] = []
         for rid in needed:
             state = self._resources[rid]
             state.owner = robot_name
             state.lock_time = now
+            rev = self._reverse_edge.get(rid)
+            if rev:
+                rev_state = self._resources.get(rev)
+                if rev_state and rev_state.owner is None:
+                    rev_state.owner = robot_name
+                    rev_state.lock_time = now
+                    granted_extras.append(rev)
 
         if robot_name not in self._robot_holdings:
             self._robot_holdings[robot_name] = set()
         self._robot_holdings[robot_name].update(needed)
+        self._robot_holdings[robot_name].update(granted_extras)
 
         return ReservationResult(granted=True)
 
+    def _rid_and_reverse(self, rid: str) -> list[str]:
+        """Return [rid] or [rid, reverse_edge] for corridor check."""
+        rev = self._reverse_edge.get(rid)
+        return [rid, rev] if rev else [rid]
+
     def release(self, robot_name: str, resource_ids: list[str]) -> bool:
         """
-        Kaynakları serbest bırak.
+        Kaynakları serbest bırak (ters yönlü edge'ler dahil).
 
         Sadece robot kendi sahip olduğu kaynakları release edebilir.
         """
         released_any = False
+        all_to_release: list[str] = []
         for rid in resource_ids:
+            all_to_release.append(rid)
+            rev = self._reverse_edge.get(rid)
+            if rev:
+                all_to_release.append(rev)
+
+        for rid in all_to_release:
             state = self._resources.get(rid)
             if state and state.owner == robot_name:
                 state.owner = None
@@ -153,7 +194,7 @@ class ReservationServer:
                 released_any = True
 
         if robot_name in self._robot_holdings:
-            self._robot_holdings[robot_name] -= set(resource_ids)
+            self._robot_holdings[robot_name] -= set(all_to_release)
             if not self._robot_holdings[robot_name]:
                 del self._robot_holdings[robot_name]
 

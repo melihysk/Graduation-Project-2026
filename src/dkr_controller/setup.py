@@ -28,7 +28,9 @@ setup(
     license="Apache-2.0",
     entry_points={
         "console_scripts": [
-            "dkr_traffic_manager = dkr_controller.traffic_manager_node:main",
+            "dkr_standalone_manager = dkr_controller.standalone_traffic_manager:main",
+            "fleet_state_publisher = dkr_controller.fleet_state_publisher:main",
+            "task_dispatcher_dkr = dkr_controller.task_dispatcher_dkr:main",
         ],
     },
 )
