@@ -211,42 +211,6 @@ class ResourceGraphIDKR:
 
         return None
 
-    def find_path_bfs_avoiding(
-        self,
-        start_idx: int,
-        goal_idx: int,
-        avoid_nodes: set[int] | None = None,
-        avoid_edges: set[tuple[int, int]] | None = None,
-    ) -> list[int] | None:
-        """BFS ile belirli düğüm/kenarlardan kaçınarak en kısa yolu bulur (Res2)."""
-        if start_idx == goal_idx:
-            return [start_idx]
-        if start_idx not in self.nodes or goal_idx not in self.nodes:
-            return None
-
-        a_nodes = avoid_nodes or set()
-        a_edges = avoid_edges or set()
-
-        visited: set[int] = {start_idx}
-        queue: deque[list[int]] = deque([[start_idx]])
-
-        while queue:
-            path = queue.popleft()
-            current = path[-1]
-
-            for neighbor in self.nodes[current].neighbors:
-                if neighbor in a_nodes:
-                    continue
-                if (current, neighbor) in a_edges:
-                    continue
-                if neighbor == goal_idx:
-                    return path + [neighbor]
-                if neighbor not in visited:
-                    visited.add(neighbor)
-                    queue.append(path + [neighbor])
-
-        return None
-
     def all_resource_ids(self) -> list[str]:
         """
         Tüm kaynak ID'leri.

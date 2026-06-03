@@ -111,25 +111,17 @@ class TaskDispatcherDkr(Node):
         task_id = f"dkr-{uuid.uuid4().hex[:10]}"
         task_type = task_def.get("type", "delivery")
 
-        if task_type == "delivery":
-            payload = {
-                "task_id": task_id,
-                "type": "delivery",
-                "pickup_place": task_def["pickup"]["place"],
-                "dropoff_place": task_def["dropoff"]["place"],
-                "priority": task_def.get("priority", 0),
-            }
-        elif task_type == "patrol":
-            payload = {
-                "task_id": task_id,
-                "type": "patrol",
-                "places": task_def["places"],
-                "rounds": task_def.get("rounds", 1),
-                "priority": task_def.get("priority", 0),
-            }
-        else:
-            self.get_logger().warn(f"Unknown task type: {task_type}")
+        if task_type != "delivery":
+            self.get_logger().warn(f"Unsupported task type: {task_type}")
             return
+
+        payload = {
+            "task_id": task_id,
+            "type": "delivery",
+            "pickup_place": task_def["pickup"]["place"],
+            "dropoff_place": task_def["dropoff"]["place"],
+            "priority": task_def.get("priority", 0),
+        }
 
         msg = String()
         msg.data = json.dumps(payload)

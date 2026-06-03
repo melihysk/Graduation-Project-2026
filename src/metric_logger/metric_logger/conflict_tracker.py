@@ -57,11 +57,9 @@ class ConflictTracker:
         self._dkr_resolved_conflict_count: int = 0
         self._dkr_resolution_times: list[float] = []
 
-        # Res1/Res2 counters (İDKR)
+        # Res1 counters (İDKR)
         self._res1_attempt_count: int = 0
         self._res1_success_count: int = 0
-        self._res2_attempt_count: int = 0
-        self._res2_success_count: int = 0
 
     @property
     def conflict_count(self) -> int:
@@ -210,11 +208,6 @@ class ConflictTracker:
             if event.get("granted", False):
                 self._res1_success_count += 1
 
-        elif event_type == "res2_triggered":
-            self._res2_attempt_count += 1
-            if event.get("granted", False):
-                self._res2_success_count += 1
-
         elif event_type == "deadlock":
             self._dkr_deadlock_count += 1
             self._deadlock_count += 1
@@ -262,9 +255,7 @@ class ConflictTracker:
             "dkr_deny_count": self._dkr_deny_count,
             "dkr_deadlock_count": self._dkr_deadlock_count,
             "dkr_unique_conflict_count": self._dkr_unique_conflict_count,
-            # İDKR Res1/Res2 metrics
+            # İDKR Res1 metrics
             "res1_attempt_count": self._res1_attempt_count,
             "res1_success_count": self._res1_success_count,
-            "res2_attempt_count": self._res2_attempt_count,
-            "res2_success_count": self._res2_success_count,
         }

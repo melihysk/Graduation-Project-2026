@@ -1,20 +1,20 @@
 """
 İDKR Merkezi Kaynak Tahsis Sunucusu — CP-destekli rezervasyon + Res1.
 
-DKR'nin ReservationServer'ını genişletir:
-  - Edge kaynakları: aynı mutex davranışı (ters yön engelleme dahil)
-  - Normal düğümler (node_X): aynı mutex davranışı
-  - CP kaynakları (cp_X_Y): her biri bağımsız mutex, aynı kavşaktaki
-    farklı CP'ler eş zamanlı farklı robotlara verilebilir
-  - Res1: Kavşakta bir CP dolu iken, o CP'deki robotu başka boş CP'ye
-    mantıksal olarak kaydırarak yeni robota yer açma
+Verma, Olm, Suárez (IEEE Access, 2024) Table 1 kuralları:
+  - Edge kaynakları: mutex (ters yön engelleme dahil)
+  - Normal düğümler (node_X): mutex (kapasite 1)
+  - CP kaynakları (cp_X_Y): bağımsız mutex, eş zamanlı farklı robotlara
+  - Kavşak kapasitesi: SNi ≤ 2
+  - Res1: Engelleyen robotu boş CP'ye kaydır (entry/exit CP hariç)
+  - Path Saturation (Rule 9): komşu kavşaklar eş zamanlı dolu olamaz
+  - SFP: Cycle pursuit-free kontrolü ile loop conflict önleme
 
 All-or-nothing semantik korunur.
 """
 
 from __future__ import annotations
 
-import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
@@ -27,7 +27,6 @@ if TYPE_CHECKING:
 class ResourceState:
     resource_id: str
     owner: str | None = None
-    lock_time: float = 0.0
 
 
 @dataclass
@@ -48,6 +47,12 @@ class ReservationServerIDKR:
 
     CP-aware: kavşak düğümlerindeki CP'ler bağımsız mutex kaynak olarak
     yönetilir. Res1 mekanizması ile engelleyen robot boş CP'ye kaydırılabilir.
+
+    Path Saturation (Rule 9): Komşu kavşakların eş zamanlı saturated olması
+    engellenir — deadlock-freedom garantisi için kritik.
+
+    SFP: Cycle pursuit-free kontrolü — graph'taki cycle'larda tüm node'larda
+    aynı yönde pursuit zinciri oluşmasını engeller.
     """
 
     def __init__(self, all_resource_ids: list[str], cp_manager: "CPManager"):
@@ -58,6 +63,7 @@ class ReservationServerIDKR:
         self._cp_manager = cp_manager
         self._deadlock_detector: "DeadlockDetector | None" = None
         self._robot_holdings: dict[str, set[str]] = {}
+        self._graph_cycles: list[list[int]] = []
 
         self._reverse_edge: dict[str, str] = {}
         for rid in all_resource_ids:
@@ -77,9 +83,9 @@ class ReservationServerIDKR:
     def set_deadlock_detector(self, detector: "DeadlockDetector") -> None:
         self._deadlock_detector = detector
 
-    @property
-    def robot_holdings(self) -> dict[str, set[str]]:
-        return self._robot_holdings
+    def set_graph_cycles(self, cycles: list[list[int]]) -> None:
+        """SFP kontrolü için graph cycle'larını ayarla."""
+        self._graph_cycles = cycles
 
     def get_owner(self, resource_id: str) -> str | None:
         state = self._resources.get(resource_id)
@@ -127,6 +133,26 @@ class ReservationServerIDKR:
                             reason=f"junction_full: max 2 robots at junction {jnode}",
                         )
 
+                    # Rule 9: Path Saturation — komşu kavşak da saturated ise deny
+                    if self._would_violate_path_saturation(jnode, robot_name):
+                        blocker = self._any_junction_occupant(jnode, robot_name)
+                        return ReservationResult(
+                            granted=False,
+                            blocking_robot=blocker or "",
+                            blocking_resources=[rid],
+                            reason=f"path_saturation: adjacent junction saturated at {jnode}",
+                        )
+
+                    # SFP: Cycle pursuit-free kontrolü
+                    if self._would_violate_sfp(jnode, robot_name):
+                        blocker = self._any_junction_occupant(jnode, robot_name)
+                        return ReservationResult(
+                            granted=False,
+                            blocking_robot=blocker or "",
+                            blocking_resources=[rid],
+                            reason=f"sfp_violation: loop conflict risk at junction {jnode}",
+                        )
+
             for check_rid in self._rid_and_reverse(rid):
                 state = self._resources.get(check_rid)
                 if state is None:
@@ -152,18 +178,15 @@ class ReservationServerIDKR:
                         reason=f"resource_busy: {check_rid} held by {state.owner}",
                     )
 
-        now = time.time()
         granted_extras: list[str] = []
         for rid in needed:
             state = self._resources[rid]
             state.owner = robot_name
-            state.lock_time = now
             rev = self._reverse_edge.get(rid)
             if rev:
                 rev_state = self._resources.get(rev)
                 if rev_state and rev_state.owner is None:
                     rev_state.owner = robot_name
-                    rev_state.lock_time = now
                     granted_extras.append(rev)
 
         if robot_name not in self._robot_holdings:
@@ -177,12 +200,17 @@ class ReservationServerIDKR:
         self,
         requesting_robot: str,
         blocked_cp_id: str,
+        requester_exit_neighbor: int | None = None,
     ) -> ReservationResult:
         """
         Res1 mekanizması: engelli CP'deki robotu boş bir CP'ye kaydır.
 
+        Makale kısıtlaması (Verma et al.): Blocker'ın taşınacağı CP,
+        requester'ın ne entry ne de exit CP'si olmalıdır.
+
         1. blocked_cp_id'nin sahibini (blocking_robot) bul
-        2. Aynı kavşakta boş CP var mı kontrol et
+        2. Aynı kavşakta uygun boş CP var mı kontrol et
+           (requester'ın entry/exit CP'si olmayan)
         3. Varsa: blocking_robot'un rezervasyonunu boş CP'ye taşı
         4. blocked_cp_id artık boş → requesting_robot'a ver
 
@@ -225,9 +253,19 @@ class ReservationServerIDKR:
                 reason="res1_not_junction",
             )
 
+        # Requester'ın exit CP'sini belirle (blocker buraya taşınmamalı)
+        exit_cp_id: str | None = None
+        if requester_exit_neighbor is not None:
+            exit_cp = junction_info.get_cp_for_neighbor(requester_exit_neighbor)
+            if exit_cp:
+                exit_cp_id = exit_cp.resource_id
+
         free_cp_id: str | None = None
         for cp in junction_info.control_points:
             if cp.resource_id == blocked_cp_id:
+                continue
+            # Makale kısıtlaması: exit CP'ye taşıma
+            if cp.resource_id == exit_cp_id:
                 continue
             cp_state = self._resources.get(cp.resource_id)
             if cp_state and cp_state.owner is None:
@@ -242,21 +280,17 @@ class ReservationServerIDKR:
                 reason=f"res1_no_free_cp: junction {junction_node} full",
             )
 
-        now = time.time()
         state.owner = None
-        state.lock_time = 0.0
         if blocking_robot in self._robot_holdings:
             self._robot_holdings[blocking_robot].discard(blocked_cp_id)
 
         free_state = self._resources[free_cp_id]
         free_state.owner = blocking_robot
-        free_state.lock_time = now
         if blocking_robot not in self._robot_holdings:
             self._robot_holdings[blocking_robot] = set()
         self._robot_holdings[blocking_robot].add(free_cp_id)
 
         state.owner = requesting_robot
-        state.lock_time = now
         if requesting_robot not in self._robot_holdings:
             self._robot_holdings[requesting_robot] = set()
         self._robot_holdings[requesting_robot].add(blocked_cp_id)
@@ -282,14 +316,12 @@ class ReservationServerIDKR:
         new_state = self._resources.get(new_cp)
         if new_state and new_state.owner == br:
             new_state.owner = None
-            new_state.lock_time = 0.0
             if br in self._robot_holdings:
                 self._robot_holdings[br].discard(new_cp)
 
         orig_state = self._resources.get(orig_cp)
         if orig_state and orig_state.owner is None:
             orig_state.owner = br
-            orig_state.lock_time = 0.0
             if br not in self._robot_holdings:
                 self._robot_holdings[br] = set()
             self._robot_holdings[br].add(orig_cp)
@@ -320,6 +352,75 @@ class ReservationServerIDKR:
         rev = self._reverse_edge.get(rid)
         return [rid, rev] if rev else [rid]
 
+    # ------------------------------------------------------------------
+    # Rule 9: Path Saturation
+    # ------------------------------------------------------------------
+
+    def _would_violate_path_saturation(
+        self, junction_node: int, requesting_robot: str,
+    ) -> bool:
+        """Rule 9: Eğer bu kavşağa robot tahsis edilirse ve kavşak saturated (SN=2)
+        olacaksa, komşu kavşaklardan herhangi biri zaten saturated mi kontrol et.
+
+        İki komşu kavşak aynı anda saturated olamaz (Theorem 1 ispatı).
+        """
+        current_occupancy = self._count_junction_occupants(junction_node, requesting_robot)
+        if current_occupancy < 1:
+            return False
+
+        neighbors = self._cp_manager._node_neighbors.get(junction_node, [])
+        for neighbor_node in neighbors:
+            if not self._cp_manager.is_junction(neighbor_node):
+                continue
+            neighbor_occupancy = self._count_junction_occupants(
+                neighbor_node, requesting_robot,
+            )
+            if neighbor_occupancy >= 2:
+                return True
+
+        return False
+
+    # ------------------------------------------------------------------
+    # SFP: Cycle Pursuit-Free
+    # ------------------------------------------------------------------
+
+    def _would_violate_sfp(
+        self, junction_node: int, requesting_robot: str,
+    ) -> bool:
+        """SFP kontrolü (Definition 13-14): Bu kavşağa allocation yapılırsa
+        graph'taki herhangi bir cycle'da pursuit loop oluşur mu?
+
+        Bir cycle "troubled" sayılır: cycle'daki her node'da en az bir robot
+        varsa ve hepsi aynı yönde (cycle sırası) hareket ediyorsa.
+
+        Basitleştirilmiş kontrol: requesting_robot hariç, cycle'daki tüm
+        diğer node'larda en az bir robot (CP owner) varsa, bu allocation
+        cycle'ı troubled yapabilir — deny.
+        """
+        if not self._graph_cycles:
+            return False
+
+        for cycle in self._graph_cycles:
+            if junction_node not in cycle:
+                continue
+
+            all_occupied = True
+            for node in cycle:
+                if node == junction_node:
+                    continue
+                if not self._cp_manager.is_junction(node):
+                    all_occupied = False
+                    break
+                occupant_count = self._count_junction_occupants(node, requesting_robot)
+                if occupant_count == 0:
+                    all_occupied = False
+                    break
+
+            if all_occupied:
+                return True
+
+        return False
+
     def release(self, robot_name: str, resource_ids: list[str]) -> bool:
         released_any = False
         all_to_release: list[str] = []
@@ -333,7 +434,6 @@ class ReservationServerIDKR:
             state = self._resources.get(rid)
             if state and state.owner == robot_name:
                 state.owner = None
-                state.lock_time = 0.0
                 released_any = True
 
         if robot_name in self._robot_holdings:

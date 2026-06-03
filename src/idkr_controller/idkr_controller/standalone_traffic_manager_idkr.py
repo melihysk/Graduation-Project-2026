@@ -1,11 +1,12 @@
 """
-IDRR Standalone Traffic Manager — Verma, Olm, Suárez (IEEE Access, 2024).
+IDKR Standalone Traffic Manager — Verma, Olm, Suárez (IEEE Access, 2024).
 
 DKR'den temel algoritmik farklar:
   1. Kavşak düğümleri CP alt-kaynaklarına bölünür (eş zamanlı erişim)
-  2. Kavşakta max 2 robot sınırı
-  3. Deny → Res1 (engelleyen robot boş CP'ye kaydırılır)
-  4. Res1 başarısız → alternatif rota (engelden kaçınma)
+  2. Kavşakta max 2 robot sınırı (SNi ≤ 2)
+  3. Deny → Res1 (engelleyen robot boş CP'ye kaydırılır, exit CP hariç)
+  4. SFP (Cycle Pursuit-Free) kontrolü ile loop conflict önleme
+  5. Path Saturation (Rule 9): komşu kavşakların eş zamanlı doluluk engeli
 
 Görev atama, Delivery FSM, şarj'a dönüş ve rota planlama mantığı
 DKR ile birebir aynıdır (saf algoritma karşılaştırması).
@@ -79,13 +80,11 @@ class ActivePath:
     robot_name: str
     task_id: str
     waypoint_node_indices: list[int] = field(default_factory=list)
-    all_resources: list[str] = field(default_factory=list)
     current_segment_idx: int = 0
     held_resources: set[str] = field(default_factory=set)
     waiting: bool = False
     waiting_since: float = 0.0
     assign_time: float = 0.0
-    res2_count: int = 0
 
 
 # ---------------------------------------------------------------------------
@@ -97,7 +96,6 @@ _DWELL_TIME_SEC = 3.0
 _STALE_WAIT_SEC = 15.0
 _MAP_LEVEL = "L1"
 _CHARGER_RETURN_TASK_ID = "__charger_return__"
-_MAX_RES2_PER_NAV = 2
 _JUNCTION_GUARD_DIST = 2.0
 
 
@@ -134,8 +132,13 @@ class StandaloneTrafficManagerIDKR(Node):
         self._reservation_server.set_deadlock_detector(self._deadlock_detector)
         self._conflict_classifier = ConflictClassifier(self._cp_manager)
 
+        # SFP: Cycle pursuit-free — precompute graph cycles
+        graph_cycles = self._cp_manager.find_simple_cycles()
+        self._reservation_server.set_graph_cycles(graph_cycles)
+
         self.get_logger().info(
-            f"İDKR resource graph loaded: {self._resource_graph}"
+            f"İDKR resource graph loaded: {self._resource_graph} "
+            f"SFP cycles={len(graph_cycles)}"
         )
 
         # Robot fleet tracking
@@ -155,11 +158,9 @@ class StandaloneTrafficManagerIDKR(Node):
         # Cmd ID counter
         self._cmd_id = 100
 
-        # Res1/Res2 statistics
+        # Res1 statistics
         self._res1_attempts = 0
         self._res1_success = 0
-        self._res2_attempts = 0
-        self._res2_success = 0
 
         # Collision proximity tracking
         self._near_miss_count = 0
@@ -370,7 +371,6 @@ class StandaloneTrafficManagerIDKR(Node):
             self._summary_logged = True
             self.get_logger().info(
                 f"[SUMMARY] Res1={self._res1_success}/{self._res1_attempts} "
-                f"Res2={self._res2_success}/{self._res2_attempts} "
                 f"deadlocks={self._deadlock_detector.deadlock_count} "
                 f"near_miss={self._near_miss_count}"
             )
@@ -433,7 +433,6 @@ class StandaloneTrafficManagerIDKR(Node):
             robot_name=robot_name,
             task_id=task_id,
             waypoint_node_indices=route,
-            all_resources=all_resources,
             assign_time=time.time(),
         )
         self._active_paths[robot_name] = ap
@@ -515,13 +514,16 @@ class StandaloneTrafficManagerIDKR(Node):
                         blocked_resource=blocked_rid,
                         requesting_path=ap.waypoint_node_indices,
                         blocking_path=self._get_robot_path(result.blocking_robot),
-                        requesting_segment_idx=ap.current_segment_idx,
                     )
 
                     if self._conflict_classifier.should_attempt_res1(conflict):
                         self._res1_attempts += 1
+                        req_exit_node = self._get_exit_node_at_junction(
+                            ap, blocked_rid,
+                        )
                         res1_result = self._reservation_server.try_res1(
                             robot_name, blocked_rid,
+                            requester_exit_neighbor=req_exit_node,
                         )
 
                         self._publish_event("res1_triggered", {
@@ -610,11 +612,6 @@ class StandaloneTrafficManagerIDKR(Node):
                                     ap.waiting_since = 0.0
                                 return True
 
-            # --- Res2: alternatif rota ile yeniden planlama ---
-            if not res1_success:
-                if self._try_res2_replan(robot_name, result):
-                    return True
-
             ap.waiting = True
             if not ap.waiting_since:
                 ap.waiting_since = time.time()
@@ -630,174 +627,6 @@ class StandaloneTrafficManagerIDKR(Node):
                 "reason": result.reason,
             })
             return False
-
-    def _try_res2_replan(
-        self,
-        robot_name: str,
-        deny_result,
-    ) -> bool:
-        """Res2: engelli kaynaktan kaçınarak alternatif rota bul ve değiştir.
-
-        Returns True ise aktif yol değiştirildi (grant veya retry beklenecek).
-        """
-        ap = self._active_paths.get(robot_name)
-        if ap is None or ap.res2_count >= _MAX_RES2_PER_NAV:
-            return False
-        if not deny_result.blocking_resources:
-            return False
-
-        blocked_rid = deny_result.blocking_resources[0]
-
-        avoid_nodes: set[int] = set()
-        avoid_edges: set[tuple[int, int]] = set()
-
-        if blocked_rid.startswith("node_"):
-            avoid_nodes.add(int(blocked_rid.split("_")[1]))
-        elif blocked_rid.startswith("edge_"):
-            parts = blocked_rid.split("_")
-            avoid_edges.add((int(parts[1]), int(parts[2])))
-        elif blocked_rid.startswith("cp_"):
-            parts = blocked_rid.split("_")
-            junction_node = int(parts[1])
-            cp_idx = int(parts[2])
-            junction_info = self._cp_manager.get_junction_info(junction_node)
-            if junction_info:
-                for cp in junction_info.control_points:
-                    if cp.cp_index == cp_idx:
-                        avoid_edges.add((cp.direction_neighbor, junction_node))
-                        break
-            else:
-                avoid_nodes.add(junction_node)
-        else:
-            return False
-
-        current_node = ap.waypoint_node_indices[ap.current_segment_idx]
-        target_node = ap.waypoint_node_indices[-1]
-
-        avoid_nodes.discard(current_node)
-        avoid_nodes.discard(target_node)
-
-        alt_route = self._resource_graph.find_path_bfs_avoiding(
-            current_node, target_node, avoid_nodes, avoid_edges,
-        )
-
-        self._res2_attempts += 1
-
-        if alt_route is None:
-            fail_key = f"res2:{robot_name}:{blocked_rid}"
-            if self._last_fail.get(robot_name) != fail_key:
-                self._last_fail[robot_name] = fail_key
-                self.get_logger().info(
-                    f"[RES2] {robot_name} FAIL blocked={blocked_rid} "
-                    f"by={deny_result.blocking_robot}"
-                )
-            self._publish_event("res2_triggered", {
-                "robot": robot_name,
-                "blocked_resource": blocked_rid,
-                "blocking_robot": deny_result.blocking_robot,
-                "granted": False,
-                "reason": "no_alternative_path",
-                "res2_attempts": self._res2_attempts,
-                "res2_success": self._res2_success,
-            })
-            return False
-
-        remaining_old = ap.waypoint_node_indices[ap.current_segment_idx:]
-        if alt_route == remaining_old:
-            return False
-
-        cur_node_rid = self._current_node_resource_id(ap, ap.current_segment_idx)
-
-        # Mevcut düğüm kaynağını koruyarak yalnızca geri kalanını release et
-        resources_to_keep = {cur_node_rid}
-        resources_to_release = [
-            r for r in ap.held_resources if r not in resources_to_keep
-        ]
-        if resources_to_release:
-            self._reservation_server.release(robot_name, resources_to_release)
-        self._deadlock_detector.clear_robot(robot_name)
-
-        all_resources = self._resource_graph.get_path_resources_idkr(alt_route)
-        self._cmd_id += 1
-
-        held_init: set[str] = set()
-        if cur_node_rid in ap.held_resources:
-            held_init.add(cur_node_rid)
-        else:
-            cur_hold = self._reservation_server.reserve(robot_name, [cur_node_rid])
-            if cur_hold.granted:
-                held_init.add(cur_node_rid)
-
-        new_ap = ActivePath(
-            robot_name=robot_name,
-            task_id=ap.task_id,
-            waypoint_node_indices=alt_route,
-            all_resources=all_resources,
-            assign_time=time.time(),
-            res2_count=ap.res2_count + 1,
-            held_resources=held_init,
-        )
-        self._active_paths[robot_name] = new_ap
-
-        needed = self._collect_needed_resources(new_ap)
-        if needed:
-            res = self._reservation_server.reserve(robot_name, needed)
-            if res.granted:
-                self._res2_success += 1
-                new_ap.held_resources.update(needed)
-                self._promote_dwell_to_path_hold(robot_name, new_ap)
-                self._last_fail.pop(robot_name, None)
-                self.get_logger().info(
-                    f"[RES2] {robot_name} OK avoiding={blocked_rid} "
-                    f"route={len(alt_route)}nodes"
-                )
-                self._publish_event("res2_triggered", {
-                    "robot": robot_name,
-                    "blocked_resource": blocked_rid,
-                    "blocking_robot": deny_result.blocking_robot,
-                    "granted": True,
-                    "original_waypoints": len(remaining_old),
-                    "new_waypoints": len(alt_route),
-                    "res2_attempts": self._res2_attempts,
-                    "res2_success": self._res2_success,
-                })
-                self._publish_event("grant", {
-                    "robot": robot_name,
-                    "resources": needed,
-                    "segment_idx": new_ap.current_segment_idx,
-                    "via_res2": True,
-                })
-                full = self._send_path_request(robot_name)
-                if not full:
-                    new_ap.waiting = True
-                    if not new_ap.waiting_since:
-                        new_ap.waiting_since = time.time()
-                else:
-                    new_ap.waiting = False
-                    new_ap.waiting_since = 0.0
-                return True
-
-        fail_key = f"res2r:{robot_name}:{blocked_rid}"
-        if self._last_fail.get(robot_name) != fail_key:
-            self._last_fail[robot_name] = fail_key
-            self.get_logger().info(
-                f"[RES2] {robot_name} FAIL reserve_failed "
-                f"blocked={blocked_rid}"
-            )
-        self._publish_event("res2_triggered", {
-            "robot": robot_name,
-            "blocked_resource": blocked_rid,
-            "blocking_robot": deny_result.blocking_robot,
-            "granted": False,
-            "reason": "alternative_reservation_failed",
-            "original_waypoints": len(remaining_old),
-            "new_waypoints": len(alt_route),
-            "res2_attempts": self._res2_attempts,
-            "res2_success": self._res2_success,
-        })
-        new_ap.waiting = True
-        new_ap.waiting_since = time.time()
-        return True
 
     def _send_path_request(self, robot_name: str) -> bool:
         """Yol gönder. True=tam yol, False=kavşak guard nedeniyle kesilmiş yol."""
@@ -1048,7 +877,6 @@ class StandaloneTrafficManagerIDKR(Node):
                 if r not in needed and r not in ap.held_resources:
                     needed.append(r)
 
-        cur_node_idx = ap.waypoint_node_indices[ap.current_segment_idx]
         cur_rid = self._current_node_resource_id(ap, ap.current_segment_idx)
         if cur_rid not in ap.held_resources and cur_rid not in needed:
             needed.insert(0, cur_rid)
@@ -1280,6 +1108,27 @@ class StandaloneTrafficManagerIDKR(Node):
         ap = self._active_paths.get(robot_name)
         if ap:
             return ap.waypoint_node_indices
+        return None
+
+    def _get_exit_node_at_junction(
+        self, ap: ActivePath, cp_resource_id: str,
+    ) -> int | None:
+        """Requester'ın kavşaktaki çıkış yönünü (next node) döndürür.
+
+        Res1'de blocker bu CP'ye taşınmamalı (makale kısıtlaması).
+        """
+        parts = cp_resource_id.split("_")
+        if len(parts) < 3:
+            return None
+        junction_node = int(parts[1])
+
+        try:
+            j_pos = ap.waypoint_node_indices.index(junction_node)
+        except ValueError:
+            return None
+
+        if j_pos < len(ap.waypoint_node_indices) - 1:
+            return ap.waypoint_node_indices[j_pos + 1]
         return None
 
     # ------------------------------------------------------------------

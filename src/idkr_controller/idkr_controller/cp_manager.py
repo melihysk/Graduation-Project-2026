@@ -139,6 +139,47 @@ class CPManager:
     def junctions(self) -> dict[int, JunctionInfo]:
         return self._junctions
 
+    def find_simple_cycles(self, max_length: int = 8) -> list[list[int]]:
+        """Graf'taki basit cycle'ları bul (SFP kontrolü için).
+
+        Sadece kavşak düğümlerini içeren cycle'lar döndürülür.
+        max_length ile arama derinliği sınırlanır.
+        """
+        cycles: list[list[int]] = []
+        junction_nodes = set(self._junctions.keys())
+
+        if not junction_nodes:
+            return cycles
+
+        visited_cycles: set[tuple[int, ...]] = set()
+
+        def _dfs(start: int, current: int, path: list[int], depth: int):
+            if depth > max_length:
+                return
+
+            for neighbor in self._node_neighbors.get(current, []):
+                if neighbor == start and len(path) >= 3:
+                    canonical = tuple(sorted(path))
+                    if canonical not in visited_cycles:
+                        visited_cycles.add(canonical)
+                        cycles.append(list(path))
+                    continue
+
+                if neighbor in path:
+                    continue
+
+                if neighbor not in junction_nodes:
+                    continue
+
+                path.append(neighbor)
+                _dfs(start, neighbor, path, depth + 1)
+                path.pop()
+
+        for node in sorted(junction_nodes):
+            _dfs(node, node, [node], 1)
+
+        return cycles
+
     def __repr__(self) -> str:
         counts = {"T": 0, "X": 0, "MULTI": 0}
         for j in self._junctions.values():

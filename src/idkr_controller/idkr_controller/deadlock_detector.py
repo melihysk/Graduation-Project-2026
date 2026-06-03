@@ -30,23 +30,14 @@ class DeadlockDetector:
     """
 
     def __init__(self):
-        # wait-for graph: robot → set of robots it's waiting for
         self._wait_for: dict[str, dict[str, str]] = {}
-        # robot priorities (lower value = higher priority)
-        self._priorities: dict[str, int] = {}
         self._deadlock_count: int = 0
 
     @property
     def deadlock_count(self) -> int:
         return self._deadlock_count
 
-    def set_priority(self, robot_name: str, priority: int) -> None:
-        self._priorities[robot_name] = priority
-
     def get_priority(self, robot_name: str) -> int:
-        if robot_name in self._priorities:
-            return self._priorities[robot_name]
-        # Extract numeric suffix as default priority
         digits = "".join(c for c in robot_name if c.isdigit())
         return int(digits) if digits else 99
 
