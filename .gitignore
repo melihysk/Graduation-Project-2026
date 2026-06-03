@@ -16,10 +16,7 @@ __pycache__/
 .DS_Store
 
 # Keep local run notes out of git
-run.md
-warehouse_starter_building_yaml_aciklamasi.md
-.rmf_schedule_node.yaml
-WAREHOUSE_STARTER_TASKS.md
+md/
 
 .cursor/
 docs/

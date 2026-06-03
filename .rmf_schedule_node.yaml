@@ -1,0 +1,120 @@
+- operation: Add
+  participant_description:
+    name: tinyRobot2
+    group: tinyRobot
+    responsiveness: Responsive
+    profile:
+      footprint:
+        type: Circle
+        index: 0
+      vicinity:
+        type: Circle
+        index: 1
+      shape_context:
+        - 0.29999999999999999
+        - 0.5
+- operation: Add
+  participant_description:
+    name: tinyRobot1
+    group: tinyRobot
+    responsiveness: Responsive
+    profile:
+      footprint:
+        type: Circle
+        index: 0
+      vicinity:
+        type: Circle
+        index: 1
+      shape_context:
+        - 0.29999999999999999
+        - 0.5
+- operation: Add
+  participant_description:
+    name: warehouseRobot2
+    group: warehouseRobot
+    responsiveness: Responsive
+    profile:
+      footprint:
+        type: Circle
+        index: 0
+      vicinity:
+        type: Circle
+        index: 1
+      shape_context:
+        - 0.29999999999999999
+        - 0.5
+- operation: Add
+  participant_description:
+    name: warehouseRobot3
+    group: warehouseRobot
+    responsiveness: Responsive
+    profile:
+      footprint:
+        type: Circle
+        index: 0
+      vicinity:
+        type: Circle
+        index: 1
+      shape_context:
+        - 0.29999999999999999
+        - 0.5
+- operation: Add
+  participant_description:
+    name: warehouseRobot1
+    group: warehouseRobot
+    responsiveness: Responsive
+    profile:
+      footprint:
+        type: Circle
+        index: 0
+      vicinity:
+        type: Circle
+        index: 1
+      shape_context:
+        - 0.29999999999999999
+        - 0.5
+- operation: Add
+  participant_description:
+    name: warehouseRobot1
+    group: tinyRobot
+    responsiveness: Responsive
+    profile:
+      footprint:
+        type: Circle
+        index: 0
+      vicinity:
+        type: Circle
+        index: 1
+      shape_context:
+        - 0.29999999999999999
+        - 0.5
+- operation: Add
+  participant_description:
+    name: warehouseRobot4
+    group: warehouseRobot
+    responsiveness: Responsive
+    profile:
+      footprint:
+        type: Circle
+        index: 0
+      vicinity:
+        type: Circle
+        index: 1
+      shape_context:
+        - 0.29999999999999999
+        - 0.5
+- operation: Add
+  participant_description:
+    name: warehouseRobot5
+    group: warehouseRobot
+    responsiveness: Responsive
+    profile:
+      footprint:
+        type: Circle
+        index: 0
+      vicinity:
+        type: Circle
+        index: 1
+      shape_context:
+        - 0.29999999999999999
+        - 0.5
