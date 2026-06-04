@@ -1,21 +1,23 @@
 """
-Çatışma ve deadlock takibi.
+Çatışma ve deadlock takibi — 3 modda ortak metrikler.
 
 Mode 1 (RMF baseline):
   - /rmf_traffic/negotiation_notice → çatışma tespit edildi
   - /rmf_traffic/negotiation_conclusion → çözüldü/çözülemedi
-  - /rmf_traffic/blockade_set → dar geçitte blokaj
 
 Mode 2-3 (DKR/İDKR):
   - /dkr_events topic'inden JSON event'ler okunur
-  - Event tipleri: grant, deny, release, deadlock, path_received
-  - total_conflicts: benzersiz bekleme episode'ları (robot + blocker çifti)
-  - dkr_deny_count: ham retry sayısı (tanı amaçlı)
+  - deny → benzersiz bekleme episode'ları (total_conflicts)
+  - grant → episode çözümü (resolved_conflicts, resolution_time)
+  - deadlock → deadlock_count
+
+Ortak çıktı: total_conflicts, resolved/unresolved, deadlock_count,
+avg/max_resolution_time_sec.
 """
 
 import json
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass
@@ -27,39 +29,19 @@ class ConflictEvent:
     resolved: bool = False
 
 
-@dataclass
-class BlockadeEvent:
-    participant: int
-    reservation: int
-    start_time: float
-    end_time: float = 0.0
-    checkpoint_count: int = 0
-
-
 class ConflictTracker:
 
     def __init__(self, logger):
         self._logger = logger
         self._conflicts: dict[int, ConflictEvent] = {}
-        self._blockades: dict[tuple, BlockadeEvent] = {}
         self._deadlock_count: int = 0
         self._deadlock_threshold_sec: float = 30.0
 
-        # DKR/İDKR event counters
-        self._dkr_deny_count: int = 0
-        self._dkr_grant_count: int = 0
-        self._dkr_deadlock_count: int = 0
-        self._dkr_deny_events: list[dict] = []
-        self._dkr_deadlock_events: list[dict] = []
-        # Unique wait episodes: robot -> (blocker, start_time)
+        # DKR/İDKR event tracking (feeds total_conflicts, resolved, deadlock)
         self._dkr_active_waits: dict[str, tuple[str, float]] = {}
         self._dkr_unique_conflict_count: int = 0
         self._dkr_resolved_conflict_count: int = 0
         self._dkr_resolution_times: list[float] = []
-
-        # Res1 counters (İDKR)
-        self._res1_attempt_count: int = 0
-        self._res1_success_count: int = 0
 
     @property
     def conflict_count(self) -> int:
@@ -128,23 +110,6 @@ class ConflictTracker:
                                 f"unresolved for {duration:.1f}s"
                             )
 
-    def on_blockade_set(self, msg):
-        """rmf_traffic_msgs/msg/BlockadeSet callback."""
-        key = (msg.participant, msg.reservation)
-        if key not in self._blockades:
-            self._blockades[key] = BlockadeEvent(
-                participant=msg.participant,
-                reservation=msg.reservation,
-                start_time=time.time(),
-                checkpoint_count=len(msg.path),
-            )
-
-    def on_blockade_release(self, msg):
-        """rmf_traffic_msgs/msg/BlockadeRelease callback."""
-        key = (msg.participant, msg.reservation)
-        if key in self._blockades:
-            self._blockades[key].end_time = time.time()
-
     # ------------------------------------------------------------------
     # DKR/İDKR event handling
     # ------------------------------------------------------------------
@@ -188,8 +153,6 @@ class ConflictTracker:
         now = time.time()
 
         if event_type == "deny":
-            self._dkr_deny_count += 1
-            self._dkr_deny_events.append(event)
             robot = event.get("robot", "")
             if robot:
                 self._begin_dkr_wait_episode(robot, self._dkr_blocker_key(event), now)
@@ -198,20 +161,12 @@ class ConflictTracker:
             )
 
         elif event_type == "grant":
-            self._dkr_grant_count += 1
             robot = event.get("robot", "")
             if robot:
                 self._resolve_dkr_wait_episode(robot, now)
 
-        elif event_type == "res1_triggered":
-            self._res1_attempt_count += 1
-            if event.get("granted", False):
-                self._res1_success_count += 1
-
         elif event_type == "deadlock":
-            self._dkr_deadlock_count += 1
             self._deadlock_count += 1
-            self._dkr_deadlock_events.append(event)
             cycle = event.get("cycle", [])
             victim = event.get("victim", "")
             if victim:
@@ -249,13 +204,4 @@ class ConflictTracker:
             "max_resolution_time_sec": round(
                 max(resolution_times), 3
             ) if resolution_times else 0.0,
-            "blockade_count": len(self._blockades),
-            # DKR-specific metrics
-            "dkr_grant_count": self._dkr_grant_count,
-            "dkr_deny_count": self._dkr_deny_count,
-            "dkr_deadlock_count": self._dkr_deadlock_count,
-            "dkr_unique_conflict_count": self._dkr_unique_conflict_count,
-            # İDKR Res1 metrics
-            "res1_attempt_count": self._res1_attempt_count,
-            "res1_success_count": self._res1_success_count,
         }

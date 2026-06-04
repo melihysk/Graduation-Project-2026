@@ -10,6 +10,7 @@ Kullanım:
 """
 
 import json
+import math
 import os
 import time
 from pathlib import Path
@@ -44,8 +45,6 @@ from rmf_traffic_msgs.msg import (
     NegotiationNotice,
     NegotiationConclusion,
     NegotiationStatuses,
-    BlockadeSet,
-    BlockadeRelease,
 )
 from std_msgs.msg import String
 
@@ -112,14 +111,6 @@ class MetricLoggerNode(Node):
             reliability=ReliabilityPolicy.RELIABLE,
             durability=DurabilityPolicy.TRANSIENT_LOCAL,
         )
-        # BEST_EFFORT + VOLATILE: rmf_traffic_blockade uses best-effort on blockade topics.
-        best_effort_volatile = QoSProfile(
-            history=History.KEEP_LAST,
-            depth=10,
-            reliability=ReliabilityPolicy.BEST_EFFORT,
-            durability=DurabilityPolicy.VOLATILE,
-        )
-
         # Previous task_id per robot for transition detection.
         self._robot_prev_task_ids: dict[str, str] = {}
         # Track when a robot first moved with a given task_id (for start_time).
@@ -164,21 +155,16 @@ class MetricLoggerNode(Node):
             self._conflict_tracker.on_negotiation_statuses, reliable_volatile
         )
 
-        # Blockade subscribers — BEST_EFFORT publisher (rmf_traffic_blockade)
-        self.create_subscription(
-            BlockadeSet, '/rmf_traffic/blockade_set',
-            self._conflict_tracker.on_blockade_set, best_effort_volatile
-        )
-        self.create_subscription(
-            BlockadeRelease, '/rmf_traffic/blockade_release',
-            self._conflict_tracker.on_blockade_release, best_effort_volatile
-        )
-
         # DKR/İDKR event subscriber (Mode 2-3)
         self.create_subscription(
             String, '/dkr_events',
             self._on_dkr_event, reliable_volatile
         )
+
+        # Near-miss proximity tracking (all modes, from fleet_states)
+        self._near_miss_count: int = 0
+        self._collision_pairs_logged: set[tuple[str, str]] = set()
+        self._robot_positions: dict[str, tuple[float, float]] = {}
 
         # Status timer — check if experiment should end
         self._experiment_start = time.time()
@@ -240,12 +226,46 @@ class MetricLoggerNode(Node):
                 )
 
     def _on_fleet_state(self, msg):
-        """Combined fleet_states handler: robot metrics + task completion detection."""
+        """Combined fleet_states handler: robot metrics + task completion + near-miss."""
         self._robot_tracker.on_fleet_state(msg)
         self._last_fleet_robot_tasks = [
             (robot.name, (robot.task_id or "").strip()) for robot in msg.robots
         ]
+        for robot in msg.robots:
+            self._robot_positions[robot.name] = (robot.location.x, robot.location.y)
+        self._check_near_miss(msg)
         self._detect_task_transitions(msg)
+
+    _NEAR_MISS_DIST = 0.8
+
+    def _check_near_miss(self, msg):
+        """Detect near-miss events from fleet_states robot positions (all modes)."""
+        active_robots = [
+            (r.name, r.location.x, r.location.y)
+            for r in msg.robots
+            if (r.task_id or "").strip() not in ("", "0")
+        ]
+        still_close: set[tuple[str, str]] = set()
+
+        for i in range(len(active_robots)):
+            for j in range(i + 1, len(active_robots)):
+                n1, x1, y1 = active_robots[i]
+                n2, x2, y2 = active_robots[j]
+                dist = math.hypot(x1 - x2, y1 - y2)
+                if dist >= self._NEAR_MISS_DIST:
+                    continue
+                pair = (min(n1, n2), max(n1, n2))
+                still_close.add(pair)
+                if pair in self._collision_pairs_logged:
+                    continue
+                self._collision_pairs_logged.add(pair)
+                self._near_miss_count += 1
+                self.get_logger().warn(
+                    f'[NEAR MISS] {n1} <-> {n2} dist={dist:.2f}m '
+                    f'(total={self._near_miss_count})'
+                )
+
+        self._collision_pairs_logged &= still_close
 
     def _detect_task_transitions(self, msg):
         """
@@ -430,6 +450,7 @@ class MetricLoggerNode(Node):
                 "deadlock_count": conflict_metrics["deadlock_count"],
                 "conflict_count": conflict_metrics["total_conflicts"],
                 "total_energy_wh": energy_metrics["total_energy_wh"],
+                "near_miss_count": self._near_miss_count,
             },
         }
 
@@ -455,6 +476,7 @@ class MetricLoggerNode(Node):
         self.get_logger().info(f'  Wait variance:     {summary["wait_time_variance"]:.4f}')
         self.get_logger().info(f'  Deadlocks:         {summary["deadlock_count"]}')
         self.get_logger().info(f'  Conflicts:         {summary["conflict_count"]}')
+        self.get_logger().info(f'  Near misses:       {summary["near_miss_count"]}')
         self.get_logger().info(f'  Energy:            {summary["total_energy_wh"]:.4f} Wh')
         self.get_logger().info('=' * 50)
 

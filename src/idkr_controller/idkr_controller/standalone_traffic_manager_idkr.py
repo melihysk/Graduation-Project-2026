@@ -1097,10 +1097,16 @@ class StandaloneTrafficManagerIDKR(Node):
                     (r1.x + r2.x) / 2, (r1.y + r2.y) / 2,
                 )
                 self.get_logger().warn(
-                    f"[COLLISION] {n1} <-> {n2} dist={dist:.2f}m "
+                    f"[NEAR MISS] {n1} <-> {n2} dist={dist:.2f}m "
                     f"near={self._node_name(nearest) if nearest else '?'} "
                     f"(total={self._near_miss_count})"
                 )
+                self._publish_event("near_miss", {
+                    "robot_a": n1,
+                    "robot_b": n2,
+                    "distance": round(dist, 3),
+                    "near_node": self._node_name(nearest) if nearest else "",
+                })
 
         self._collision_pairs_logged &= still_close
 

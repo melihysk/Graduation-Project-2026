@@ -41,8 +41,8 @@
         type: Circle
         index: 1
       shape_context:
-        - 0.29999999999999999
-        - 0.5
+        - 0.59999999999999998
+        - 1.5
 - operation: Add
   participant_description:
     name: warehouseRobot3
@@ -56,8 +56,8 @@
         type: Circle
         index: 1
       shape_context:
-        - 0.29999999999999999
-        - 0.5
+        - 0.59999999999999998
+        - 1.5
 - operation: Add
   participant_description:
     name: warehouseRobot1
@@ -71,8 +71,8 @@
         type: Circle
         index: 1
       shape_context:
-        - 0.29999999999999999
-        - 0.5
+        - 0.59999999999999998
+        - 1.5
 - operation: Add
   participant_description:
     name: warehouseRobot1
@@ -101,8 +101,8 @@
         type: Circle
         index: 1
       shape_context:
-        - 0.29999999999999999
-        - 0.5
+        - 0.59999999999999998
+        - 1.5
 - operation: Add
   participant_description:
     name: warehouseRobot5

@@ -155,6 +155,10 @@ class StandaloneTrafficManager(Node):
         # Cmd ID counter for PathRequests
         self._cmd_id = 100
 
+        # Collision proximity tracking
+        self._near_miss_count = 0
+        self._collision_pairs_logged: set[tuple[str, str]] = set()
+
         # QoS
         reliable_qos = QoSProfile(
             history=History.KEEP_LAST,
@@ -189,6 +193,7 @@ class StandaloneTrafficManager(Node):
         self.create_timer(1.0, self._assign_pending_tasks)
         self.create_timer(5.0, self._watchdog_stale_waits)
         self.create_timer(1.0, self._publish_route_visualization)
+        self.create_timer(0.5, self._check_collision_proximity)
 
         self.get_logger().info(
             "DKR Standalone Traffic Manager started "
@@ -923,6 +928,49 @@ class StandaloneTrafficManager(Node):
         dwell_id = f"node_{dwell_idx}"
         if dwell_id in ap.held_resources:
             del self._dwell_nodes[robot_name]
+
+    # ------------------------------------------------------------------
+    # Collision proximity
+    # ------------------------------------------------------------------
+
+    def _check_collision_proximity(self) -> None:
+        """Hareket halindeki robotlar arası mesafeyi kontrol et, yakın geçişleri logla."""
+        _NEAR_MISS_DIST = 0.8
+        active = [
+            (name, r) for name, r in self._robots.items()
+            if r.last_state_time > 0 and name in self._active_paths
+        ]
+        still_close: set[tuple[str, str]] = set()
+
+        for i in range(len(active)):
+            for j in range(i + 1, len(active)):
+                n1, r1 = active[i]
+                n2, r2 = active[j]
+                dist = math.hypot(r1.x - r2.x, r1.y - r2.y)
+                if dist >= _NEAR_MISS_DIST:
+                    continue
+                pair = (min(n1, n2), max(n1, n2))
+                still_close.add(pair)
+                if pair in self._collision_pairs_logged:
+                    continue
+                self._collision_pairs_logged.add(pair)
+                self._near_miss_count += 1
+                nearest = self._closest_node(
+                    (r1.x + r2.x) / 2, (r1.y + r2.y) / 2,
+                )
+                self.get_logger().warn(
+                    f"[NEAR MISS] {n1} <-> {n2} dist={dist:.2f}m "
+                    f"near={self._node_name(nearest) if nearest else '?'} "
+                    f"(total={self._near_miss_count})"
+                )
+                self._publish_event("near_miss", {
+                    "robot_a": n1,
+                    "robot_b": n2,
+                    "distance": round(dist, 3),
+                    "near_node": self._node_name(nearest) if nearest else "",
+                })
+
+        self._collision_pairs_logged &= still_close
 
     # ------------------------------------------------------------------
     # RViz route visualization (/{prefix}_route_markers)
