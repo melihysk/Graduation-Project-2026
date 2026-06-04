@@ -36,7 +36,7 @@
   <arg name="sim_update_rate" default="100"/>
   <arg name="config_file" default="$(find-pkg-share rmf_demos_maps)/warehouse_starter/warehouse_starter.building.yaml"/>
   <arg name="nav_graph_file" default="$(find-pkg-share rmf_demos_maps)/maps/warehouse_starter/nav_graphs/0.yaml"/>
-  <arg name="viz_config_file" default="$(find-pkg-share rmf_demos)/include/warehouse_starter/warehouse_starter.rviz"/>
+  <arg name="viz_config_file" default="$(find-pkg-share rmf_demos)/include/warehouse_starter/warehouse_starter_dkr.rviz"/>
 
   <!-- Gazebo simulation (slotcar robots + world) -->
   <include file="$(find-pkg-share rmf_demos_gz)/simulation.launch.xml">
