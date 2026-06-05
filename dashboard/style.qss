@@ -1,0 +1,371 @@
+/* Açık tema (Catppuccin Latte esinli) */
+
+* {
+    font-family: "Segoe UI", "Ubuntu", "Noto Sans", sans-serif;
+}
+
+QMainWindow {
+    background-color: #eff1f5;
+}
+
+QWidget#centralWidget {
+    background-color: #eff1f5;
+}
+
+/* ── Üst menü ── */
+QWidget#topbar {
+    background-color: #e6e9ef;
+    border-bottom: 1px solid #ccd0da;
+}
+
+QPushButton.navButton {
+    background: transparent;
+    color: #5c5f77;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+QPushButton.navButton:hover {
+    background: #dce0e8;
+    color: #4c4f69;
+}
+
+QPushButton.navButton:checked {
+    background: #dce0e8;
+    color: #1e66f5;
+    border-bottom: 3px solid #1e66f5;
+}
+
+QLabel#appTitle {
+    color: #1e66f5;
+    font-size: 16px;
+    font-weight: bold;
+    padding: 0 8px 0 0;
+}
+
+/* ── İçerik ── */
+QWidget#contentArea {
+    background-color: #eff1f5;
+}
+
+QScrollArea {
+    background-color: #eff1f5;
+    border: none;
+}
+
+QScrollArea > QWidget > QWidget {
+    background-color: #eff1f5;
+}
+
+/* ── Kartlar ── */
+QFrame.metricCard {
+    background: #ffffff;
+    border-radius: 10px;
+    border: 1px solid #ccd0da;
+    padding: 16px;
+}
+
+QFrame.metricCard:hover {
+    border: 1px solid #acb0be;
+}
+
+QFrame.metricCardBest {
+    background: #ffffff;
+    border-radius: 10px;
+    border: 2px solid #40a02b;
+    padding: 16px;
+}
+
+QFrame.metricCardWorst {
+    background: #ffffff;
+    border-radius: 10px;
+    border: 2px solid #d20f39;
+    padding: 16px;
+}
+
+/* ── Etiketler ── */
+QLabel.sectionTitle {
+    color: #4c4f69;
+    font-size: 20px;
+    font-weight: bold;
+    padding: 4px 0px;
+}
+
+QLabel.sectionSubtitle {
+    color: #6c6f85;
+    font-size: 13px;
+    padding-bottom: 8px;
+}
+
+QLabel.cardTitle {
+    color: #4c4f69;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+QLabel.cardValue {
+    color: #1e66f5;
+    font-size: 22px;
+    font-weight: bold;
+}
+
+QLabel.cardValueGood {
+    color: #40a02b;
+    font-size: 22px;
+    font-weight: bold;
+}
+
+QLabel.cardValueBad {
+    color: #d20f39;
+    font-size: 22px;
+    font-weight: bold;
+}
+
+QLabel.cardLabel {
+    color: #7c7f93;
+    font-size: 11px;
+}
+
+QLabel.statusLabel {
+    color: #6c6f85;
+    font-size: 13px;
+    padding: 4px 8px;
+    border-radius: 4px;
+}
+
+QLabel.statusRunning {
+    color: #df8e1d;
+    background: rgba(223, 142, 29, 0.12);
+    font-size: 13px;
+    padding: 4px 8px;
+    border-radius: 4px;
+}
+
+QLabel.statusDone {
+    color: #40a02b;
+    background: rgba(64, 160, 43, 0.12);
+    font-size: 13px;
+    padding: 4px 8px;
+    border-radius: 4px;
+}
+
+QLabel.statusError {
+    color: #d20f39;
+    background: rgba(210, 15, 57, 0.1);
+    font-size: 13px;
+    padding: 4px 8px;
+    border-radius: 4px;
+}
+
+/* ── Düğmeler ── */
+QPushButton.primaryButton {
+    background: #1e66f5;
+    color: #ffffff;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 20px;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+QPushButton.primaryButton:hover {
+    background: #2a6ef5;
+}
+
+QPushButton.primaryButton:pressed {
+    background: #1854c4;
+}
+
+QPushButton.primaryButton:disabled {
+    background: #ccd0da;
+    color: #9ca0b0;
+}
+
+QPushButton.dangerButton {
+    background: #d20f39;
+    color: #ffffff;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 20px;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+QPushButton.dangerButton:hover {
+    background: #e64562;
+}
+
+QPushButton.dangerButton:disabled {
+    background: #ccd0da;
+    color: #9ca0b0;
+}
+
+QPushButton.secondaryButton {
+    background: #ffffff;
+    color: #4c4f69;
+    border: 1px solid #ccd0da;
+    border-radius: 8px;
+    padding: 10px 20px;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+QPushButton.secondaryButton:hover {
+    background: #f4f4f5;
+    border: 1px solid #acb0be;
+}
+
+QPushButton.secondaryButton:disabled {
+    background: #e6e9ef;
+    color: #9ca0b0;
+}
+
+/* ── Combo / Spin ── */
+QComboBox {
+    background: #ffffff;
+    color: #4c4f69;
+    border: 1px solid #ccd0da;
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 13px;
+    min-width: 140px;
+}
+
+QComboBox:hover {
+    border: 1px solid #acb0be;
+}
+
+QComboBox::drop-down {
+    border: none;
+    width: 24px;
+}
+
+QComboBox QAbstractItemView {
+    background: #ffffff;
+    color: #4c4f69;
+    selection-background-color: #dce0e8;
+    border: 1px solid #ccd0da;
+    border-radius: 4px;
+}
+
+QSpinBox {
+    background: #ffffff;
+    color: #4c4f69;
+    border: 1px solid #ccd0da;
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 13px;
+}
+
+/* ── Radyo ── */
+QRadioButton {
+    color: #4c4f69;
+    font-size: 13px;
+    spacing: 8px;
+}
+
+QRadioButton::indicator {
+    width: 16px;
+    height: 16px;
+    border-radius: 8px;
+    border: 2px solid #acb0be;
+    background: transparent;
+}
+
+QRadioButton::indicator:checked {
+    background: #1e66f5;
+    border: 2px solid #1e66f5;
+}
+
+/* ── İlerleme ── */
+QProgressBar {
+    background: #dce0e8;
+    border: none;
+    border-radius: 6px;
+    height: 12px;
+    text-align: center;
+    font-size: 10px;
+    color: #4c4f69;
+}
+
+QProgressBar::chunk {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+        stop:0 #1e66f5, stop:1 #209fb5);
+    border-radius: 6px;
+}
+
+/* ── Grup ── */
+QGroupBox {
+    color: #4c4f69;
+    font-size: 14px;
+    font-weight: bold;
+    border: 1px solid #ccd0da;
+    border-radius: 8px;
+    margin-top: 12px;
+    padding-top: 20px;
+    background: #ffffff;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    padding: 0 8px;
+    color: #6c6f85;
+}
+
+/* ── Kaydırma ── */
+QScrollBar:vertical {
+    background: #eff1f5;
+    width: 8px;
+    margin: 0;
+}
+
+QScrollBar::handle:vertical {
+    background: #ccd0da;
+    border-radius: 4px;
+    min-height: 30px;
+}
+
+QScrollBar::handle:vertical:hover {
+    background: #acb0be;
+}
+
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0;
+}
+
+QScrollBar:horizontal {
+    background: #eff1f5;
+    height: 8px;
+}
+
+QScrollBar::handle:horizontal {
+    background: #ccd0da;
+    border-radius: 4px;
+    min-width: 30px;
+}
+
+/* ── İpucu ── */
+QToolTip {
+    background: #ffffff;
+    color: #4c4f69;
+    border: 1px solid #ccd0da;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 12px;
+}
+
+QFrame.separator {
+    background: #ccd0da;
+    max-height: 1px;
+}
+
+QFrame.separatorVertical {
+    background: #ccd0da;
+    max-width: 1px;
+    min-width: 1px;
+    margin: 4px 8px;
+}
