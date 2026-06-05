@@ -1,15 +1,21 @@
-"""Comparison tab: grouped bar charts, radar chart, per-robot breakdown, heatmap."""
+"""Comparison tab: overview grid, bar chart, and radar chart."""
 
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QComboBox, QScrollArea, QFrame, QSplitter,
+    QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,
+    QComboBox, QScrollArea, QFrame,
 )
 from PyQt6.QtCore import Qt
 
 from data.results_loader import (
-    ResultsLoader, MODES, SCENARIOS, MODE_LABELS, SCENARIO_LABELS, SUMMARY_METRICS,
+    ResultsLoader, MODES, SCENARIOS, MODE_LABELS, SCENARIO_LABELS,
+    SUMMARY_METRICS, RADAR_METRICS,
 )
-from widgets.chart_widgets import GroupedBarChart, RadarChart, StackedBarChart, HeatmapTable
+from widgets.chart_widgets import GroupedBarChart, RadarChart
+from widgets.metric_card import MetricCard
+
+
+def _short_label(label: str) -> str:
+    return label.split(" (")[0]
 
 
 class ComparisonTab(QWidget):
@@ -26,15 +32,67 @@ class ComparisonTab(QWidget):
         self._main_layout.setContentsMargins(24, 20, 24, 20)
         self._main_layout.setSpacing(16)
 
-        title = QLabel("Algoritma Karşılaştırması")
+        title = QLabel("Karşılaştırma")
         title.setProperty("class", "sectionTitle")
         self._main_layout.addWidget(title)
 
-        subtitle = QLabel("DKR · IDKR · Open-RMF — tüm metrikler")
-        subtitle.setProperty("class", "sectionSubtitle")
-        self._main_layout.addWidget(subtitle)
+        grid_title = QLabel("Tüm senaryolar — verim özeti")
+        grid_title.setProperty("class", "sectionTitle")
+        self._main_layout.addWidget(grid_title)
 
-        # Filters row
+        grid_help = QLabel(
+            "DKR, IDKR ve Open-RMF algoritmalarının Normal, Dar Koridor ve Yoğun Trafik "
+            "senaryolarındaki karşılaştırması. Her hücre, o algoritma ve senaryo için "
+            "kayıtlı tüm simülasyon koşularının ortalama verimini gösterir."
+        )
+        grid_help.setProperty("class", "sectionSubtitle")
+        grid_help.setWordWrap(True)
+        self._main_layout.addWidget(grid_help)
+
+        self._grid = QGridLayout()
+        self._grid.setSpacing(8)
+        self._grid.setColumnStretch(0, 0)
+        for j in range(len(MODES)):
+            self._grid.setColumnStretch(j + 1, 1)
+
+        for j, mode in enumerate(MODES):
+            header = QLabel(MODE_LABELS[mode])
+            header.setProperty("class", "cardTitle")
+            header.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            self._grid.addWidget(header, 0, j + 1)
+
+        for i, scenario in enumerate(SCENARIOS):
+            header = QLabel(SCENARIO_LABELS[scenario])
+            header.setProperty("class", "cardTitle")
+            header.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            self._grid.addWidget(header, i + 1, 0)
+
+        self._grid_cards: dict[tuple[str, str], MetricCard] = {}
+        for i, scenario in enumerate(SCENARIOS):
+            for j, mode in enumerate(MODES):
+                card = MetricCard(title="Verim", value="--", label="—")
+                card.setMinimumSize(140, 88)
+                self._grid_cards[(mode, scenario)] = card
+                self._grid.addWidget(card, i + 1, j + 1)
+
+        grid_row = QHBoxLayout()
+        grid_row.addStretch(1)
+        grid_widget = QWidget()
+        grid_widget.setLayout(self._grid)
+        grid_row.addWidget(grid_widget)
+        grid_row.addStretch(1)
+        self._main_layout.addLayout(grid_row)
+
+        divider = QFrame()
+        divider.setProperty("class", "separator")
+        divider.setFrameShape(QFrame.Shape.HLine)
+        divider.setFixedHeight(1)
+        self._main_layout.addWidget(divider)
+
+        charts_title = QLabel("Seçili senaryo ve metrik")
+        charts_title.setProperty("class", "sectionTitle")
+        self._main_layout.addWidget(charts_title)
+
         filter_row = QHBoxLayout()
         filter_row.setSpacing(12)
 
@@ -53,34 +111,17 @@ class ComparisonTab(QWidget):
         self._metric_combo.currentIndexChanged.connect(self._on_filter_change)
         filter_row.addWidget(self._metric_combo)
 
-        filter_row.addWidget(QLabel("Robot detayı:"))
-        self._robot_mode_combo = QComboBox()
-        for mode in MODES:
-            self._robot_mode_combo.addItem(MODE_LABELS[mode], mode)
-        self._robot_mode_combo.currentIndexChanged.connect(self._on_filter_change)
-        filter_row.addWidget(self._robot_mode_combo)
-
         filter_row.addStretch()
         self._main_layout.addLayout(filter_row)
 
-        # Charts
-        self._bar_chart = GroupedBarChart(figsize=(9, 3.5))
-        self._main_layout.addWidget(self._bar_chart)
+        self._bar_chart = GroupedBarChart(figsize=(5.5, 3.4))
+        self._radar_chart = RadarChart(figsize=(4.5, 3.4))
 
         charts_row = QHBoxLayout()
-        charts_row.setSpacing(12)
-
-        self._radar_chart = RadarChart(figsize=(5, 4.5))
-        charts_row.addWidget(self._radar_chart)
-
-        self._stacked_chart = StackedBarChart(figsize=(6, 4))
-        charts_row.addWidget(self._stacked_chart)
-
+        charts_row.setSpacing(16)
+        charts_row.addWidget(self._bar_chart, stretch=3)
+        charts_row.addWidget(self._radar_chart, stretch=2)
         self._main_layout.addLayout(charts_row)
-
-        # Heatmap
-        self._heatmap = HeatmapTable(figsize=(8, 3))
-        self._main_layout.addWidget(self._heatmap)
 
         self._main_layout.addStretch()
 
@@ -91,104 +132,102 @@ class ComparisonTab(QWidget):
 
     def refresh(self):
         self._loader.reload()
+        self._refresh_grid()
         self._on_filter_change()
+
+    def _refresh_grid(self):
+        for scenario in SCENARIOS:
+            throughputs = {}
+            for mode in MODES:
+                card = self._grid_cards[(mode, scenario)]
+                card.set_card_style("neutral")
+                avgs, count = self._loader.get_averages(mode, scenario)
+                if count:
+                    avg_tp = avgs.get("throughput_per_min", 0)
+                    throughputs[mode] = avg_tp
+                    card.set_value(f"{avg_tp:.2f}")
+                    card.set_label(
+                        f"{count} koşu · {avgs.get('avg_completion_time_sec', 0):.0f} sn · "
+                        f"{avgs.get('deadlock_count', 0):.0f} kilitlenme"
+                    )
+                else:
+                    card.set_value("--")
+                    card.set_label("Veri yok")
+                    throughputs[mode] = None
+
+            valid = {m: v for m, v in throughputs.items() if v is not None}
+            if len(valid) < 2:
+                continue
+
+            best_mode = max(valid, key=valid.get)
+            worst_mode = min(valid, key=valid.get)
+            self._grid_cards[(best_mode, scenario)].set_card_style("best")
+            self._grid_cards[(best_mode, scenario)].set_value(
+                f"{valid[best_mode]:.2f}", "good"
+            )
+            if best_mode != worst_mode:
+                self._grid_cards[(worst_mode, scenario)].set_card_style("worst")
+                self._grid_cards[(worst_mode, scenario)].set_value(
+                    f"{valid[worst_mode]:.2f}", "bad"
+                )
 
     def _on_filter_change(self):
         scenario_filter = self._scenario_combo.currentData()
         metric_key = self._metric_combo.currentData()
-
         if not metric_key:
             return
 
-        metric_info = None
-        for key, label, hib in SUMMARY_METRICS:
-            if key == metric_key:
-                metric_info = (key, label, hib)
-                break
+        metric_info = next(
+            ((key, label, hib) for key, label, hib in SUMMARY_METRICS if key == metric_key),
+            None,
+        )
         if not metric_info:
             return
 
         _, metric_label, higher_is_better = metric_info
         scenarios = SCENARIOS if scenario_filter == "all" else [scenario_filter]
-
-        # Grouped bar chart
+        sc_title = (
+            "Tüm Senaryolar"
+            if scenario_filter == "all"
+            else SCENARIO_LABELS[scenario_filter]
+        )
         bar_data = {}
         for mode in MODES:
             bar_data[mode] = {}
             for sc in scenarios:
-                r = self._loader.get_latest(mode, sc)
-                val = r.summary.get(metric_key, 0) if r else 0
-                bar_data[mode][sc] = val
+                avgs, count = self._loader.get_averages(mode, sc)
+                bar_data[mode][sc] = avgs.get(metric_key, 0) if count else 0
 
-        self._bar_chart.plot(bar_data, title=metric_label, ylabel=metric_label,
-                            higher_is_better=higher_is_better)
+        self._bar_chart.plot(
+            bar_data,
+            title=metric_label,
+            ylabel=metric_label,
+            higher_is_better=higher_is_better,
+        )
 
-        # Radar chart (use first scenario or average across all)
-        target_scenario = scenarios[0] if len(scenarios) == 1 else scenarios[0]
-        radar_metrics = []
+        metric_lookup = {key: (label, hib) for key, label, hib in SUMMARY_METRICS}
         radar_labels = []
-        radar_data = {}
-
-        normalize_metrics = [
-            ("throughput_per_min", "Verim", True),
-            ("avg_completion_time_sec", "Tamamlanma", False),
-            ("deadlock_count", "Kilitlenme", False),
-            ("conflict_count", "Çakışma", False),
-            ("near_miss_count", "Yakın Kaçınma", False),
-            ("total_energy_wh", "Enerji", False),
-        ]
-
-        raw_values = {mode: [] for mode in MODES}
-        valid_labels = []
-        for mk, ml, hib in normalize_metrics:
-            vals = {}
-            for mode in MODES:
-                r = self._loader.get_latest(mode, target_scenario)
-                vals[mode] = r.summary.get(mk, 0) if r else 0
-
-            max_val = max(vals.values()) if vals else 1
+        radar_data = {mode: [] for mode in MODES}
+        for mk in RADAR_METRICS:
+            ml, hib = metric_lookup[mk]
+            vals = {
+                mode: self._loader.get_metric_average(mode, scenarios, mk)
+                for mode in MODES
+            }
+            max_val = max(vals.values()) if vals else 0
             if max_val == 0:
                 continue
 
-            valid_labels.append(ml)
+            radar_labels.append(_short_label(ml))
             for mode in MODES:
                 v = vals[mode] / max_val
                 if not hib:
                     v = 1.0 - v
-                v = max(0.05, min(1.0, v))
-                raw_values[mode].append(v)
+                radar_data[mode].append(max(0.05, min(1.0, v)))
 
-        for mode in MODES:
-            if raw_values[mode]:
-                radar_data[mode] = raw_values[mode]
-
-        sc_label = SCENARIO_LABELS.get(target_scenario, target_scenario)
-        self._radar_chart.plot(radar_data, valid_labels,
-                              title=f"Çoklu Metrik — {sc_label}")
-
-        # Stacked bar: per-robot time for selected mode in target_scenario
-        selected_mode = self._robot_mode_combo.currentData() or MODES[0]
-        stacked_data = {}
-        r = self._loader.get_latest(selected_mode, target_scenario)
-        if r and r.per_robot:
-            for rname, rdata in r.per_robot.items():
-                stacked_data[rname] = {
-                    "moving": rdata.get("moving_time_sec", 0),
-                    "waiting": rdata.get("waiting_time_sec", 0),
-                    "idle": rdata.get("idle_time_sec", 0),
-                    "charging": rdata.get("charging_time_sec", 0),
-                }
-            self._stacked_chart.plot(stacked_data,
-                                    title=f"Robot Zaman Dağılımı — {MODE_LABELS[selected_mode]} / {sc_label}")
-        else:
-            self._stacked_chart.plot({}, title=f"Robot verisi yok — {MODE_LABELS[selected_mode]} / {sc_label}")
-
-        # Heatmap table
-        heatmap_data = {}
-        for sc in SCENARIOS:
-            heatmap_data[sc] = {}
-            for mode in MODES:
-                r = self._loader.get_latest(mode, sc)
-                heatmap_data[sc][mode] = r.summary.get(metric_key, 0) if r else 0
-
-        self._heatmap.plot(heatmap_data, metric_label, higher_is_better)
+        radar_data = {mode: values for mode, values in radar_data.items() if values}
+        self._radar_chart.plot(
+            radar_data,
+            radar_labels,
+            title=f"Genel Profil — {sc_title}",
+        )

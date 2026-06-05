@@ -36,6 +36,8 @@ class ConflictTracker:
         self._conflicts: dict[int, ConflictEvent] = {}
         self._deadlock_count: int = 0
         self._deadlock_threshold_sec: float = 30.0
+        self._deadlock_shutdown_pending: bool = False
+        self._deadlock_shutdown_reason: str = ""
 
         # DKR/İDKR event tracking (feeds total_conflicts, resolved, deadlock)
         self._dkr_active_waits: dict[str, tuple[str, float]] = {}
@@ -50,6 +52,40 @@ class ConflictTracker:
     @property
     def deadlock_count(self) -> int:
         return self._deadlock_count
+
+    @property
+    def deadlock_shutdown_pending(self) -> bool:
+        return self._deadlock_shutdown_pending
+
+    @property
+    def deadlock_shutdown_reason(self) -> str:
+        return self._deadlock_shutdown_reason
+
+    def _flag_negotiation_deadlock(self, event: ConflictEvent, duration: float) -> None:
+        if hasattr(event, '_deadlock_flagged'):
+            return
+
+        event._deadlock_flagged = True
+        self._deadlock_count += 1
+        participants = event.participants or []
+        reason = (
+            f"negotiation conflict #{event.conflict_version} unresolved for "
+            f"{duration:.1f}s (participants: {participants})"
+        )
+        self._deadlock_shutdown_reason = reason
+        self._deadlock_shutdown_pending = True
+        self._logger.warn(f"DEADLOCK detected: {reason}")
+
+    def poll_stale_negotiations(self) -> bool:
+        """Periodic check for negotiations that never received a conclusion."""
+        now = time.time()
+        for event in self._conflicts.values():
+            if event.end_time:
+                continue
+            duration = now - event.start_time
+            if duration > self._deadlock_threshold_sec:
+                self._flag_negotiation_deadlock(event, duration)
+        return self._deadlock_shutdown_pending
 
     def on_negotiation_notice(self, msg):
         """rmf_traffic_msgs/msg/NegotiationNotice callback."""
@@ -102,13 +138,7 @@ class ConflictTracker:
                 if not event.end_time:
                     duration = now - event.start_time
                     if duration > self._deadlock_threshold_sec:
-                        if not hasattr(event, '_deadlock_flagged'):
-                            event._deadlock_flagged = True
-                            self._deadlock_count += 1
-                            self._logger.warn(
-                                f"DEADLOCK detected: conflict #{cv} "
-                                f"unresolved for {duration:.1f}s"
-                            )
+                        self._flag_negotiation_deadlock(event, duration)
 
     # ------------------------------------------------------------------
     # DKR/İDKR event handling

@@ -171,6 +171,7 @@ class MetricLoggerNode(Node):
         self._last_task_completion_time = 0.0
         self._last_known_completed_count = 0
         self._finished = False
+        self._end_reason = 'running'
         self._last_fleet_robot_tasks: list[tuple[str, str]] = []
         self._last_agent_status_log_wall = 0.0
         self._stale_timeout_sec = 90.0
@@ -362,6 +363,19 @@ class MetricLoggerNode(Node):
                    if pending_dispatch > 0 and self._expected_tasks > 0 else '')
             )
 
+        # Finish condition 0: RMF negotiation deadlock (stuck active negotiation).
+        if self._traffic_mode == 'rmf':
+            self._conflict_tracker.poll_stale_negotiations()
+            if self._conflict_tracker.deadlock_shutdown_pending:
+                reason = self._conflict_tracker.deadlock_shutdown_reason
+                self.get_logger().warn(
+                    f'RMF negotiation deadlock — saving partial results and shutting down. '
+                    f'{reason}'
+                )
+                self._end_reason = 'deadlock'
+                self._finish_experiment()
+                return
+
         # Finish condition 1: all expected tasks completed.
         all_done = (
             self._expected_tasks > 0 and self._task_tracker.all_tasks_completed
@@ -375,6 +389,7 @@ class MetricLoggerNode(Node):
                     f'all {self._expected_robots} robots at charger. '
                     f'Saving results...'
                 )
+                self._end_reason = 'completed'
                 self._finish_experiment()
                 return
 
@@ -393,6 +408,7 @@ class MetricLoggerNode(Node):
 
         if all_done:
             self.get_logger().info('All expected tasks completed. Saving results...')
+            self._end_reason = 'completed'
             self._finish_experiment()
             return
 
@@ -416,10 +432,12 @@ class MetricLoggerNode(Node):
                         f'{remaining} task(s) were never assigned by RMF. '
                         f'Saving partial results ({completed}/{self._expected_tasks})...'
                     )
+                    self._end_reason = 'stale_timeout'
                 else:
                     self.get_logger().info(
                         f'No new task completions for {idle_duration:.0f}s. Finishing...'
                     )
+                    self._end_reason = 'stale_timeout'
                 self._finish_experiment()
                 return
 
@@ -438,6 +456,11 @@ class MetricLoggerNode(Node):
                 "run_id": self._run_id,
                 "experiment_timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
                 "total_elapsed_sec": round(time.time() - self._experiment_start, 2),
+                "end_reason": self._end_reason,
+                "deadlock_shutdown_reason": (
+                    self._conflict_tracker.deadlock_shutdown_reason
+                    if self._end_reason == 'deadlock' else ""
+                ),
             },
             "task_metrics": task_metrics,
             "robot_metrics": robot_metrics,

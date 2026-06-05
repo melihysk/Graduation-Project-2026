@@ -81,24 +81,27 @@ class GroupedBarChart(FigureCanvasQTAgg):
         x = np.arange(n_scenarios)
         width = 0.7 / n_modes
 
+        from data.results_loader import MODE_LABELS
         for i, mode in enumerate(modes):
             values = [data[mode].get(s, 0) for s in scenarios]
             bars = ax.bar(
                 x + i * width - (n_modes - 1) * width / 2,
                 values, width,
-                label=mode.upper(),
+                label=MODE_LABELS.get(mode, mode),
                 color=MODE_COLORS.get(mode, CATPPUCCIN["blue"]),
                 edgecolor="none",
                 alpha=0.9,
                 zorder=3,
             )
-            for bar, val in zip(bars, values):
-                ax.text(
-                    bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.02 * max(max(v for v in data[m].values()) for m in modes if data[m]),
-                    f"{val:.1f}" if isinstance(val, float) else str(val),
-                    ha="center", va="bottom",
-                    color=CATPPUCCIN["subtext"], fontsize=8,
-                )
+            if n_scenarios == 1:
+                for bar, val in zip(bars, values):
+                    ax.text(
+                        bar.get_x() + bar.get_width() / 2,
+                        bar.get_height(),
+                        f"{val:.1f}" if isinstance(val, float) else str(val),
+                        ha="center", va="bottom",
+                        color=CATPPUCCIN["subtext"], fontsize=8,
+                    )
 
         from data.results_loader import SCENARIO_LABELS
         ax.set_xticks(x)
@@ -151,16 +154,23 @@ class RadarChart(FigureCanvasQTAgg):
         ax.spines["polar"].set_color(CATPPUCCIN["overlay"])
         ax.grid(color=CATPPUCCIN["overlay"], alpha=0.3)
 
+        from data.results_loader import MODE_LABELS
         for mode, values in data.items():
             v = values + values[:1]
             color = MODE_COLORS.get(mode, CATPPUCCIN["blue"])
-            ax.plot(angles, v, "o-", linewidth=2, label=mode.upper(), color=color, markersize=4)
-            ax.fill(angles, v, alpha=0.15, color=color)
+            ax.plot(
+                angles, v, "o-", linewidth=1.8,
+                label=MODE_LABELS.get(mode, mode),
+                color=color, markersize=3,
+            )
+            ax.fill(angles, v, alpha=0.08, color=color)
 
-        ax.legend(loc="upper right", bbox_to_anchor=(1.3, 1.1),
-                  facecolor=CATPPUCCIN["surface"], edgecolor=CATPPUCCIN["overlay"],
-                  labelcolor=CATPPUCCIN["text"], fontsize=9)
-        ax.set_title(title, color=CATPPUCCIN["text"], fontsize=12, fontweight="bold", pad=20)
+        ax.legend(
+            loc="upper center", bbox_to_anchor=(0.5, -0.08), ncol=3,
+            facecolor=CATPPUCCIN["surface"], edgecolor=CATPPUCCIN["overlay"],
+            labelcolor=CATPPUCCIN["text"], fontsize=8, framealpha=0.9,
+        )
+        ax.set_title(title, color=CATPPUCCIN["text"], fontsize=11, fontweight="bold", pad=14)
         self.draw()
 
 

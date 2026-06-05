@@ -4,9 +4,7 @@ from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
     QPushButton, QLabel, QStackedWidget, QFrame,
 )
-from PyQt6.QtCore import Qt
 
-from tabs.dashboard_tab import DashboardTab
 from tabs.comparison_tab import ComparisonTab
 from tabs.experiment_tab import ExperimentTab
 from data.results_loader import ResultsLoader
@@ -37,11 +35,9 @@ class MainWindow(QMainWindow):
         content_layout.setContentsMargins(0, 0, 0, 0)
 
         self._stack = QStackedWidget()
-        self._dashboard_tab = DashboardTab(self._results_loader)
         self._comparison_tab = ComparisonTab(self._results_loader)
         self._experiment_tab = ExperimentTab(self._results_loader, main_window=self)
 
-        self._stack.addWidget(self._dashboard_tab)
         self._stack.addWidget(self._comparison_tab)
         self._stack.addWidget(self._experiment_tab)
 
@@ -49,6 +45,7 @@ class MainWindow(QMainWindow):
         root_layout.addWidget(content, 1)
 
         self._nav_buttons[0].setChecked(True)
+        self._comparison_tab.refresh()
 
     def _build_topbar(self) -> QWidget:
         topbar = QWidget()
@@ -68,9 +65,8 @@ class MainWindow(QMainWindow):
         layout.addWidget(sep)
 
         nav_items = [
-            ("Özet", 0),
-            ("Karşılaştırma", 1),
-            ("Simülasyon", 2),
+            ("Karşılaştırma", 0),
+            ("Simülasyon", 1),
         ]
 
         self._nav_buttons: list[QPushButton] = []
@@ -86,10 +82,6 @@ class MainWindow(QMainWindow):
 
         layout.addStretch()
 
-        version_label = QLabel("ROS 2 Jazzy")
-        version_label.setProperty("class", "cardLabel")
-        layout.addWidget(version_label)
-
         return topbar
 
     def _switch_tab(self, index: int):
@@ -97,6 +89,4 @@ class MainWindow(QMainWindow):
         for i, btn in enumerate(self._nav_buttons):
             btn.setChecked(i == index)
         if index == 0:
-            self._dashboard_tab.refresh()
-        elif index == 1:
             self._comparison_tab.refresh()

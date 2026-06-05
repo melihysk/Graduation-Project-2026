@@ -12,7 +12,7 @@ MODE_LABELS = {"rmf": "Open-RMF", "dkr": "DKR", "idkr": "IDKR"}
 SCENARIOS = ["normal", "bottleneck", "high_density"]
 SCENARIO_LABELS = {
     "normal": "Normal",
-    "bottleneck": "Dar Boğaz",
+    "bottleneck": "Dar Koridor",
     "high_density": "Yoğun Trafik",
 }
 
@@ -20,11 +20,37 @@ SUMMARY_METRICS = [
     ("throughput_per_min", "Verim (görev/dk)", True),
     ("avg_completion_time_sec", "Ort. Tamamlanma (sn)", False),
     ("deadlock_count", "Kilitlenme", False),
-    ("conflict_count", "Çakışma", False),
-    ("near_miss_count", "Yakın Kaçınma", False),
-    ("total_energy_wh", "Enerji (Wh)", False),
+    ("conflict_count", "Trafik Çatışması", False),
+    ("unresolved_conflicts", "Çözülmemiş Çatışma", False),
+    ("avg_resolution_time_sec", "Ort. Çözüm Süresi (sn)", False),
+    ("avg_wait_time_sec", "Ort. Bekleme (sn)", False),
     ("wait_time_variance", "Bekleme Varyansı", False),
+    ("total_energy_wh", "Enerji (Wh)", False),
 ]
+
+RADAR_METRICS = [
+    "throughput_per_min",
+    "avg_completion_time_sec",
+    "deadlock_count",
+    "conflict_count",
+    "avg_resolution_time_sec",
+    "total_energy_wh",
+]
+
+_METRIC_SOURCES = {
+    "avg_resolution_time_sec": ("conflict_metrics", "avg_resolution_time_sec"),
+    "unresolved_conflicts": ("conflict_metrics", "unresolved_conflicts"),
+    "avg_wait_time_sec": ("robot_metrics", "avg_wait_time_sec"),
+}
+
+
+def metric_value(run: "RunResult", key: str) -> float:
+    if key in run.summary:
+        return float(run.summary.get(key, 0))
+    section, field_name = _METRIC_SOURCES.get(key, (None, None))
+    if section:
+        return float(getattr(run, section).get(field_name, 0))
+    return 0.0
 
 
 @dataclass
@@ -98,6 +124,27 @@ class ResultsLoader:
             [r for k, r in self._cache.items() if k[0] == mode and k[1] == scenario],
             key=lambda r: r.run_id,
         )
+
+    def get_averages(self, mode: str, scenario: str) -> tuple[dict[str, float], int]:
+        runs = self.list_runs(mode, scenario)
+        if not runs:
+            return {}, 0
+        totals = {key: 0.0 for key, _, _ in SUMMARY_METRICS}
+        for run in runs:
+            for key, _, _ in SUMMARY_METRICS:
+                totals[key] += metric_value(run, key)
+        count = len(runs)
+        return {key: totals[key] / count for key in totals}, count
+
+    def get_metric_average(
+        self, mode: str, scenarios: list[str], metric_key: str
+    ) -> float:
+        values = []
+        for scenario in scenarios:
+            avgs, count = self.get_averages(mode, scenario)
+            if count > 0:
+                values.append(avgs.get(metric_key, 0))
+        return sum(values) / len(values) if values else 0.0
 
     def all_results(self) -> list[RunResult]:
         return list(self._cache.values())

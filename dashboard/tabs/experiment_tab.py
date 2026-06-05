@@ -68,15 +68,6 @@ class ExperimentTab(QWidget):
         title.setProperty("class", "sectionTitle")
         layout.addWidget(title)
 
-        subtitle = QLabel(
-            "Simülasyonu başlatın (Gazebo + RViz). Algoritma otomatik devreye girer. "
-            "Durdur: Gazebo simülasyon saatini duraklatır; Devam Ettir ile süre devam eder. "
-            "Kapat: tüm süreçleri sonlandırır."
-        )
-        subtitle.setProperty("class", "sectionSubtitle")
-        subtitle.setWordWrap(True)
-        layout.addWidget(subtitle)
-
         algo_group = QGroupBox("Algoritma")
         algo_layout = QHBoxLayout(algo_group)
         self._algo_btn_group = QButtonGroup(self)
