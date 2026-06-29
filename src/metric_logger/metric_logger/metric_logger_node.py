@@ -16,10 +16,13 @@ import time
 from pathlib import Path
 
 
+from .workspace_paths import get_workspace_root
+
+
 # #region agent log
 def _agent_debug_ndjson(payload: dict) -> None:
     """Append one NDJSON line for debug-mode analysis (session e6fb85)."""
-    log_path = "/home/melih/Desktop/graduation_project/.cursor/debug-e6fb85.log"
+    log_path = get_workspace_root() / ".cursor" / "debug-e6fb85.log"
     base = {
         "sessionId": "e6fb85",
         "timestamp": int(time.time() * 1000),
@@ -77,9 +80,7 @@ class MetricLoggerNode(Node):
 
         output_dir = self.get_parameter('output_dir').value
         if not output_dir:
-            output_dir = os.path.expanduser(
-                '~/Desktop/graduation_project/results'
-            )
+            output_dir = str(get_workspace_root() / "results")
         self._output_dir = Path(output_dir) / self._traffic_mode / self._scenario_id
         self._output_dir.mkdir(parents=True, exist_ok=True)
 

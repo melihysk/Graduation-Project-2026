@@ -9,9 +9,12 @@ import psutil
 
 from PyQt6.QtCore import QProcess, QObject, pyqtSignal, QTimer
 
+from utils.paths import get_workspace_root
 
+
+_WS_ROOT = get_workspace_root()
 ROS_SETUP = "source /opt/ros/jazzy/setup.bash"
-WS_SETUP = f"source {os.path.expanduser('~/Desktop/graduation_project/install/setup.bash')}"
+WS_SETUP = f"source {_WS_ROOT / 'install' / 'setup.bash'}"
 SETUP_CMD = f"{ROS_SETUP} && {WS_SETUP}"
 
 # Graceful stop: SIGINT (ros2 launch Ctrl+C) -> SIGTERM -> SIGKILL
@@ -117,7 +120,7 @@ class LaunchProcess(QObject):
 
 
 # Project-scoped ROS processes to reap after launch trees exit.
-_WS_MARKER = "graduation_project"
+_WS_MARKER = str(_WS_ROOT.resolve()).lower()
 _ROS_CMD_MARKERS = (
     "ros-args",
     "ros2 launch",
@@ -204,7 +207,7 @@ def cleanup_stray_ros_processes(
     log: Callable[[str], None] | None = None,
     grace_sec: float = 2.0,
 ) -> list[int]:
-    """SIGTERM then SIGKILL leftover graduation_project ROS processes (blocking)."""
+    """SIGTERM then SIGKILL leftover workspace ROS processes (blocking)."""
     def _log(msg: str):
         if log:
             log(msg)

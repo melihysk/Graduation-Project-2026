@@ -4,8 +4,10 @@ import json
 from pathlib import Path
 from dataclasses import dataclass, field
 
+from utils.paths import get_workspace_root
 
-RESULTS_ROOT = Path.home() / "Desktop" / "graduation_project" / "results"
+
+RESULTS_ROOT = get_workspace_root() / "results"
 
 MODES = ["rmf", "dkr", "idkr"]
 MODE_LABELS = {"rmf": "Open-RMF", "dkr": "DKR", "idkr": "IDKR"}

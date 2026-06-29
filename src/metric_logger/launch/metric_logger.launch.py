@@ -86,7 +86,7 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'output_dir', default_value='',
-            description='Output directory for results (default: ~/Desktop/graduation_project/results)'
+            description='Output directory for results (default: <workspace>/results)'
         ),
         DeclareLaunchArgument(
             'delay_between_tasks_sec', default_value='2.0',

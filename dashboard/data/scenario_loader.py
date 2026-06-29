@@ -5,10 +5,11 @@ from dataclasses import dataclass
 
 import yaml
 
+from utils.paths import get_workspace_root
+
 
 SCENARIOS_DIR = (
-    Path.home() / "Desktop" / "graduation_project" / "src"
-    / "metric_logger" / "config" / "scenarios"
+    get_workspace_root() / "src" / "metric_logger" / "config" / "scenarios"
 )
 
 

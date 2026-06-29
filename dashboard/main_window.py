@@ -36,7 +36,7 @@ class MainWindow(QMainWindow):
 
         self._stack = QStackedWidget()
         self._comparison_tab = ComparisonTab(self._results_loader)
-        self._experiment_tab = ExperimentTab(self._results_loader, main_window=self)
+        self._experiment_tab = ExperimentTab(self._results_loader)
 
         self._stack.addWidget(self._comparison_tab)
         self._stack.addWidget(self._experiment_tab)

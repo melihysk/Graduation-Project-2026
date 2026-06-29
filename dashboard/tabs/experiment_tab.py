@@ -11,7 +11,6 @@ from PyQt6.QtCore import QTimer
 from data.results_loader import ResultsLoader, MODE_LABELS, SCENARIO_LABELS
 from data.scenario_loader import load_all_scenarios
 from utils.process_manager import LaunchProcess, RosCleanupWorker
-from utils.window_manager import arrange_windows_async
 from utils.gazebo_control import set_simulation_paused
 
 
@@ -42,10 +41,9 @@ LAUNCH_CONFIGS = {
 
 
 class ExperimentTab(QWidget):
-    def __init__(self, loader: ResultsLoader, main_window=None, parent=None):
+    def __init__(self, loader: ResultsLoader, parent=None):
         super().__init__(parent)
         self._loader = loader
-        self._main_window = main_window
         self._scenarios = load_all_scenarios()
         self._sim_proc = LaunchProcess(self)
         self._algo_proc = LaunchProcess(self)
@@ -162,10 +160,6 @@ class ExperimentTab(QWidget):
         self._algo_proc.stop_completed.connect(self._on_algo_stop_done)
         self._sim_proc.stop_completed.connect(self._on_sim_stop_done)
 
-        self._arrange_timer = QTimer(self)
-        self._arrange_timer.setSingleShot(True)
-        self._arrange_timer.timeout.connect(self._do_arrange_silent)
-
     def _selected_mode(self) -> str:
         btn = self._algo_btn_group.checkedButton()
         return btn.property("mode") if btn else "dkr"
@@ -222,9 +216,6 @@ class ExperimentTab(QWidget):
         )
 
         QTimer.singleShot(8000, lambda: self._launch_algo(algo_cmd))
-        self._arrange_timer.start(12000)
-        QTimer.singleShot(16000, self._do_arrange_silent)
-        QTimer.singleShot(22000, self._do_arrange_silent)
 
     def _launch_algo(self, cmd: str):
         if not self._experiment_active:
@@ -263,7 +254,6 @@ class ExperimentTab(QWidget):
         self._experiment_active = False
         self._append_log("[UI] Tam kapatma başlatılıyor...")
         self._progress.setVisible(True)
-        self._arrange_timer.stop()
         self._refresh_buttons()
 
         if self._algo_proc.is_running():
@@ -348,18 +338,6 @@ class ExperimentTab(QWidget):
         self._status_label.setProperty("class", cls_map.get(style, "statusLabel"))
         self._status_label.style().unpolish(self._status_label)
         self._status_label.style().polish(self._status_label)
-
-    def _do_arrange_silent(self):
-        if not self._sim_proc.is_running():
-            return
-
-        def _log(res: dict):
-            dash = "OK" if res.get("dashboard") else "-"
-            gz = "OK" if res.get("gazebo") else "-"
-            rv = "OK" if res.get("rviz") else "-"
-            self._append_log(f"[UI] Pencere düzeni: Panel={dash}, Gazebo={gz}, RViz={rv}")
-
-        arrange_windows_async(self._main_window, on_done=_log)
 
     def _append_log(self, line: str):
         self._log.append(line)

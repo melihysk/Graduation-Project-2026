@@ -102,7 +102,7 @@ images/                      # Ekran görüntüleri
 ```bash
 # Workspace oluştur ve kaynak kodu klonla
 mkdir -p ~/rmf_ws/src && cd ~/rmf_ws
-git clone <repo-url> src/graduation_project
+git clone <repo-url> src/<repo-adi>
 
 # ROS 2 bağımlılıklarını yükle
 rosdep install --from-paths src --ignore-src -r -y
@@ -111,7 +111,7 @@ rosdep install --from-paths src --ignore-src -r -y
 colcon build --symlink-install
 
 # Dashboard bağımlılıkları
-pip install -r src/graduation_project/dashboard/requirements.txt
+pip install -r src/<repo-adi>/dashboard/requirements.txt
 ```
 
 ## Çalıştırma
