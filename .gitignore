@@ -24,6 +24,3 @@ report/
 docs/
 results/
 scripts/
-
-# Root-level temp files
-dashboard_screenshot.png
