@@ -2,48 +2,92 @@
 
 ROS 2 (Humble) ve Open-RMF tabanlı depo simülasyonunda üç farklı trafik yönetim algoritmasını karşılaştıran mezuniyet projesi.
 
-## Algoritmalar
+## Problem
 
-| Mod | Yaklaşım | Açıklama |
-|-----|----------|----------|
-| **Open-RMF** | Reaktif | Varsayılan müzakere tabanlı CBS benzeri trafik yönetimi |
-| **DKR** | Proaktif | Merkezi kaynak kilitleme + deadlock tespiti |
-| **İDKR** | Gelişmiş Proaktif | Kontrol noktası yönetimi + Res1 mekanizması + çatışma sınıflandırma |
+Çok robotlu depo sistemlerinde robotlar aynı koridorları ve kavşakları paylaşır. Bu durum **trafik çatışmalarına**, **deadlock'lara** (robotların birbirini karşılıklı beklemesi) ve **verimsizliğe** yol açar. Open-RMF'in varsayılan müzakere tabanlı sistemi bu sorunları reaktif olarak çözerken, proaktif yaklaşımlar çatışmaları önceden engelleyebilir.
+
+Bu projede Open-RMF'in mevcut trafik yönetimi ile iki yeni proaktif algoritma (DKR ve İDKR) geliştirilmiş ve farklı senaryolarda performansları karşılaştırılmıştır.
 
 ## Sistem Mimarisi
 
+Sistem üç katmandan oluşur: trafik yönetim katmanı (algoritmalar), robot katmanı (Gazebo Slotcar eklentisi) ve ortak katman (simülasyon, görselleştirme, metrik toplama).
+
 ![Sistem Mimarisi](images/architecture.png)
 
-## Simülasyon
+## Algoritmalar
 
-Gazebo Harmonic üzerinde `warehouse_starter` haritasında 4 robot ile çalışır. RViz 2 ile gerçek zamanlı görselleştirme yapılır.
+### Open-RMF (Mod A — Reaktif)
+
+Open-RMF'in varsayılan trafik yönetim sistemi. `rmf_traffic_schedule` ile trajektori müzakeresi ve `rmf_fleet_adapter` ile CBS benzeri çatışma çözümü uygular. Çatışmalar **olduktan sonra** müdahale eder.
+
+### DKR — Dağıtık Kaynak Rezervasyonu (Mod B — Proaktif)
+
+Nav graph üzerindeki her düğüm ve kenarı birer **mutex kaynak** olarak tanımlar. Robot hareket etmeden önce rotası üzerindeki tüm kaynakları **all-or-nothing** semantiğiyle kilitlemelidir. Deadlock tespiti için wait-for graph üzerinde döngü analizi yapılır. Çatışmaları **olmadan önce** engeller.
+
+### İDKR — İyileştirilmiş DKR (Mod C — Gelişmiş Proaktif)
+
+DKR'nin üzerine üç mekanizma ekler:
+
+- **Kontrol Noktası (CP) Yönetimi**: Kavşakları (derece ≥ 3 düğümler) yönsel alt bölgelere ayırır. Farklı yönlerden gelen robotlar aynı kavşağı eş zamanlı kullanabilir.
+- **Res1 Mekanizması**: Bir robot engellendiğinde, engelleyen robotu boş bir kontrol noktasına kaydırarak yol açar.
+- **Çatışma Sınıflandırma**: Head-on, intersection ve pursuit olmak üzere üç çatışma tipini tespit eder ve her birine uygun çözüm stratejisi uygular.
+
+Referans: Verma, Olm, Suárez — *"Improved Deadlock-Free Resource Reservation for Multi-Robot Systems"* (IEEE Access, 2024)
+
+## Simülasyon Ortamı
+
+Gazebo Harmonic üzerinde `warehouse_starter` haritasında **4 robot** ile çalışır. Robotlar farklı istasyonlar arasında teslimat ve devriye görevleri yürütür. RViz 2 ile nav graph, robot pozisyonları ve kaynak rezervasyonları gerçek zamanlı görselleştirilir.
 
 ![Gazebo ve RViz](images/simulation.png)
 
 ## Dashboard (PyQt6)
 
-Simülasyonları başlatma, metrik toplama ve algoritma karşılaştırma arayüzü.
+Simülasyonları başlatma, metrik toplama ve algoritma karşılaştırma işlemlerini tek arayüzden yöneten gösterge paneli.
 
-**Simülasyon sekmesi** — algoritma ve senaryo seçimi:
+**Simülasyon sekmesi** — algoritma, senaryo ve tekrar sayısı seçerek simülasyonu başlatma:
 
 ![Simülasyon Sekmesi](images/dashboard_simulation.png)
 
-**Karşılaştırma sekmesi** — verim, enerji, bekleme süresi gibi metriklerin karşılaştırılması:
+**Karşılaştırma sekmesi** — verim, bekleme süresi, enerji tüketimi ve trafik çatışması metriklerinin karşılaştırılması:
 
 ![Karşılaştırma](images/dashboard_full.png)
+
+## Deneysel Sonuçlar
+
+Üç senaryo üzerinde yapılan deneylerde İDKR, DKR'ye kıyasla tutarlı performans artışı göstermiştir:
+
+| Senaryo | Görev Sayısı | İDKR Verim İyileşmesi | Bekleme Azalması | Enerji Azalması |
+|---------|-------------|----------------------|------------------|-----------------|
+| Normal | 10 | +%20 | -%23 | -%8 |
+| Dar Koridor | 12 | +%25 | -%27 | -%11 |
+| Yoğun Trafik | 16 | +%38 | -%36 | -%19 |
+
+![Verim Karşılaştırma](images/dashboard_comparison.png)
 
 ## Proje Yapısı
 
 ```
 src/
-├── dkr_controller/        # DKR: Kaynak kilitleme + deadlock tespiti
-├── idkr_controller/       # İDKR: CP yönetimi + Res1 + çatışma sınıflandırma
-├── metric_logger/         # Deney metriklerini toplayan ROS 2 paketi
-├── reservation_viz/       # RViz2 kaynak rezervasyon görselleştirme
-└── rmf_demos/             # Open-RMF demo paketleri (warehouse_starter)
-dashboard/                 # PyQt6 gösterge paneli
-images/                    # Ekran görüntüleri
+├── dkr_controller/          # DKR algoritması
+│   ├── reservation_server   # Merkezi kaynak kilitleme sunucusu
+│   ├── resource_graph       # Nav graph → kaynak graf dönüşümü
+│   ├── standalone_traffic_manager  # Görev dağıtım FSM
+│   └── deadlock_detector    # Wait-for graph döngü tespiti
+├── idkr_controller/         # İDKR algoritması
+│   ├── reservation_server_idkr  # CP-destekli rezervasyon + Res1
+│   ├── cp_manager           # Kavşak kontrol noktası yönetimi
+│   ├── conflict_classifier  # Head-on / intersection / pursuit tespiti
+│   └── deadlock_detector    # Döngü tespiti + SFP kontrolü
+├── metric_logger/           # Deney metriklerini toplayan ROS 2 paketi
+├── reservation_viz/         # RViz2 kaynak rezervasyon görselleştirme
+└── rmf_demos/               # Open-RMF demo paketleri (warehouse_starter)
+dashboard/                   # PyQt6 gösterge paneli
+images/                      # Ekran görüntüleri
 ```
+
+## UML Sınıf Diyagramı
+
+![UML Class](images/uml_class.png)
 
 ## Gereksinimler
 
@@ -86,18 +130,6 @@ ros2 launch idkr_controller idkr_standalone.launch.py
 # Dashboard
 cd dashboard && python main.py
 ```
-
-## Senaryolar
-
-| Senaryo | Görev Sayısı | Açıklama |
-|---------|-------------|----------|
-| Normal | 10 | Standart teslimat görevleri |
-| Dar Koridor | 12 | Dar geçitlerde yoğun trafik |
-| Yoğun Trafik | 16 | Yüksek görev yükü |
-
-## UML Sınıf Diyagramı
-
-![UML Class](images/uml_class.png)
 
 ## Lisans
 
