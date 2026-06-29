@@ -1,6 +1,6 @@
 # Çok Robotlu Depo Ortamında Trafik Yönetimi
 
-ROS 2 (Jazzy) ve Open-RMF tabanlı depo simülasyonunda üç farklı trafik yönetim algoritmasını karşılaştıran mezuniyet projesi.
+Depodaki robotların çarpışmadan hareket etmesi için Open-RMF, DKR ve İDKR algoritmalarını karşılaştıran ROS 2 projesi.
 
 ## Problem
 
