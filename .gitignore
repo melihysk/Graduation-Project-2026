@@ -1,28 +1,29 @@
-# ROS2 / colcon build outputs
+# ROS 2 / colcon build outputs
 build/
 install/
 log/
 
-# Project-specific generated outputs
-report/
-
-# Python cache files
+# Python
 __pycache__/
 *.py[cod]
-
-# Virtual environments
 .venv/
 dashboard/.venv/
 
-# Editor/OS noise
+# Editor / OS
 .vscode/
 .idea/
 .DS_Store
-
-# Keep local run notes out of git
-md/
-
 .cursor/
+
+# Thesis documents (private, symlink)
+Bitirme
+
+# Local notes & generated reports
+md/
+report/
 docs/
 results/
 scripts/
+
+# Root-level temp files
+dashboard_screenshot.png
